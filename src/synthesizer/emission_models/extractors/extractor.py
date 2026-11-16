@@ -246,7 +246,7 @@ class Extractor(ABC):
 
         # Check whether the model fixes any of the attributes (with or
         # without a log10 prefix) or the weight variable
-        fixed = getattr(model, "fixed_parameters", {})
+        fixed = model.fixed_parameters
         return not any(
             name in fixed or name.replace("log10", "") in fixed
             for name in (*self._emitter_attributes, str(self._weight_var))
@@ -267,7 +267,10 @@ class Extractor(ABC):
 
         Returns:
             tuple
-                The extracted attributes and the weight variable.
+                The extracted attributes and the weight variable. A
+                parametric extractor also returns the bin axis matching each
+                grid axis and each grid axis' unit conversion factor (see
+                ParametricExtractorBase.get_emitter_attrs).
         """
         pass
 
@@ -1522,10 +1525,7 @@ class ParametricExtractorBase(Extractor):
         """
         # Get the bin axis behind each grid axis (without any log10 prefix)
         grid_bin_axes = [
-            axis[5:] if log else axis
-            for axis, log in zip(
-                self._emitter_attributes, self._log_emitter_attr
-            )
+            axis.replace("log10", "") for axis in self._emitter_attributes
         ]
 
         # Every axis the emitter is binned along must be a grid axis

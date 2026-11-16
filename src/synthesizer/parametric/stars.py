@@ -500,7 +500,7 @@ class Stars(StarsComponent):
 
         Raises:
             InconsistentArguments:
-                If no SFH has been defined.
+                If no SFH has been defined, or an SFH array is offset.
         """
         # Work with the ages in years
         ages = convert_in_place(self.ages, yr).ndview
@@ -517,8 +517,14 @@ class Stars(StarsComponent):
             age = convert_in_place(self._instant_sf, yr).value + offset
             return np.array([age, age]), np.array([1.0])
 
-        # An array is defined at the points of the axis
+        # An array is defined at the points of the axis, so it can't be
+        # evaluated at offset ages
         if self.sf_hist is not None:
+            if offset != 0:
+                raise exceptions.InconsistentArguments(
+                    "An SFH array can't be offset in age, only an SFH "
+                    "function or an instantaneous SFH can."
+                )
             return self._points_to_bins(ages, self.sf_hist)
 
         # Without any of the above we have no SFH
@@ -571,6 +577,7 @@ class Stars(StarsComponent):
             " value, a SFH/ZH object, or an array must be passed"
         )
 
+    @timed("ParametricStars._get_bins")
     def _get_bins(self, age_offset=None):
         """Get the bins describing the population from the SFH and ZH.
 
@@ -696,7 +703,7 @@ class Stars(StarsComponent):
 
         # Anything derived from the bins is now stale
         self._sfzh_view = None
-        self._grid_weights = {"cic": {}, "ngp": {}}
+        self._grid_weights = {"bic": {}}
 
     def _sfzh_to_bins(self, sfzh):
         """Convert an SFZH defined at the points of the axes into bins.
@@ -727,6 +734,7 @@ class Stars(StarsComponent):
         masses[0, ::2, ::2] = sfzh
         return {"ages": age_edges, "metallicities": metal_edges}, masses
 
+    @timed("ParametricStars._bins_to_axes")
     def _bins_to_axes(self, edges, masses, mask=None):
         """Map bins onto this object's age and metallicity axes.
 
