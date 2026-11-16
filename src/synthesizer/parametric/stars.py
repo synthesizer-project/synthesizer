@@ -754,7 +754,7 @@ class Stars(StarsComponent):
         masses[0, ::2, ::2] = sfzh
         return {"ages": age_edges, "metallicities": metal_edges}, masses
 
-    def _bins_to_axes(self, edges, masses):
+    def _bins_to_axes(self, edges, masses, mask=None):
         """Map bins onto this object's age and metallicity axes.
 
         Args:
@@ -762,6 +762,9 @@ class Stars(StarsComponent):
                 The bin edges keyed by axis name.
             masses (np.ndarray):
                 The bin masses.
+            mask (np.ndarray of float):
+                The allowed range along each bin axis (see get_mask), or
+                None.
 
         Returns:
             np.ndarray:
@@ -794,7 +797,7 @@ class Stars(StarsComponent):
             (0, 1),
             (1.0, 1.0),
             1,
-            None,
+            mask,
             (
                 "log10ages",
                 "log10metallicities" if log_metals else "metallicities",
@@ -1027,7 +1030,8 @@ class Stars(StarsComponent):
 
         Returns:
             float:
-                The threshold in the units of the axis' bin edges.
+                The threshold in the units of the axis' bin edges, snapped
+                onto a bin edge it matches to within round off.
 
         Raises:
             InconsistentArguments:
@@ -1037,23 +1041,36 @@ class Stars(StarsComponent):
         if attr.startswith("log10"):
             if isinstance(thresh, unyt_quantity):
                 thresh = thresh.ndview
-            return 10 ** float(thresh)
+            value = 10 ** float(thresh)
 
         # Otherwise convert any units to the edge units (only the ages have
         # units, stored in yr)
-        axis_units = yr if axis == "ages" else None
-        if isinstance(thresh, unyt_quantity):
-            if axis_units is None:
-                return float(thresh.ndview)
-            return float(convert_in_place(thresh, axis_units).ndview)
+        elif isinstance(thresh, unyt_quantity):
+            if axis == "ages":
+                value = float(convert_in_place(thresh, yr).ndview)
+            else:
+                value = float(thresh.ndview)
 
         # A unitless threshold can't be compared with an axis that has units
-        if axis_units is not None:
+        elif axis == "ages":
             raise exceptions.InconsistentArguments(
                 f"Masking attribute ({attr}) has units but threshold does not "
                 f"({thresh})."
             )
-        return float(thresh)
+        else:
+            value = float(thresh)
+
+        # Snap the threshold onto a bin edge it matches to within round off.
+        # The edges and the threshold reach linear units by different routes
+        # (e.g. 10**log10age), which can differ in the last bit, and that
+        # would put a zero width bin exactly on the threshold on the wrong
+        # side of it
+        edges = self._bin_edges[axis]
+        upper = min(np.searchsorted(edges, value), edges.size - 1)
+        for edge in (edges[max(upper - 1, 0)], edges[upper]):
+            if abs(edge - value) <= 4 * np.finfo(np.float64).eps * abs(value):
+                return float(edge)
+        return value
 
     def calculate_median_age(self):
         """Calculate the median age of the stellar population."""

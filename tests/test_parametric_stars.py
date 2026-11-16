@@ -869,6 +869,42 @@ class TestMask:
         with pytest.raises(exceptions.InconsistentArguments):
             stars.get_mask("ages", 10 * Myr, "!=")
 
+    def test_threshold_on_axis_point(self, sfzh_stars):
+        """A threshold exactly on an axis point must act as for a particle.
+
+        The point masses of an explicit SFZH sit exactly on the age axis, so
+        a log10 age threshold equal to one of the axis points must include
+        or exclude that point just as comparing the log10 ages would,
+        regardless of round off between the threshold and the bin edges.
+
+        Args:
+            sfzh_stars (Stars):
+                The explicit SFZH Stars fixture.
+        """
+        # Every age point holds the same mass
+        nages = len(sfzh_stars.log10ages)
+        point_mass = sfzh_stars.sfzh.sum() / nages
+
+        # Mask at every axis point with every operator a range can express
+        for i, log10age in enumerate(sfzh_stars.log10ages):
+            for op, npass in (
+                ("<=", i + 1),
+                ("<", i),
+                (">=", nages - i),
+                (">", nages - i - 1),
+                ("==", 1),
+            ):
+                # Get the mass passing the mask
+                mask = sfzh_stars.get_mask("log10ages", float(log10age), op)
+                masked = sfzh_stars._bins_to_axes(
+                    sfzh_stars._bin_edges, sfzh_stars.bin_masses, mask=mask
+                )
+
+                # It must be the mass of the points passing the condition
+                assert np.isclose(masked.sum(), npass * point_mass), (
+                    f"log10ages {op} {log10age} kept the wrong points"
+                )
+
     def test_invalid_masks_raise(self, stars):
         """Unknown operators and malformed masks must raise.
 
