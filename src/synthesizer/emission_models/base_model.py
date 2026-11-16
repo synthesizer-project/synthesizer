@@ -59,6 +59,7 @@ from synthesizer.emission_models.parameters import VARIATION_TYPES
 from synthesizer.emission_models.transformers import DopplerBroadening
 from synthesizer.emission_models.utils import check_removed_overrides
 from synthesizer.emissions import LineCollection
+from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, deepcopy_with_shared_units
 from synthesizer.utils.operation_timers import timed, timer
@@ -2900,16 +2901,24 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Get the line wavelengths before any model runs. Generators need
         # them, and with models running in any order (or concurrently) we
-        # can't rely on an extraction having produced them first. If we were
-        # given existing lines we can take them from those (before any are
-        # deleted once they're no longer needed).
-        line_lams = None
-        if len(lines) > 0:
-            line_lams = lines[list(lines.keys())[0]].lam
+        # can't rely on an extraction having produced them first. We work
+        # them out from the requested lines via the tree's extraction without
+        # extracting anything.
+        line_lams = self._get_line_lams(line_ids)
 
-        # Otherwise work them out from the tree without extracting anything
-        else:
-            line_lams = self._get_line_lams(line_ids)
+        # Without an extraction we take them from the existing lines we were
+        # given (before any are deleted once they're no longer needed), which
+        # must therefore hold exactly the requested lines
+        if line_lams is None and len(lines) > 0:
+            requested = [str(alias_to_line_id(lid)) for lid in line_ids]
+            for label, existing in lines.items():
+                if list(existing.line_ids) != requested:
+                    raise exceptions.InconsistentArguments(
+                        f"Existing lines for '{label}' hold "
+                        f"{list(existing.line_ids)}, but {requested} were "
+                        "requested."
+                    )
+            line_lams = lines[list(lines.keys())[0]].lam
 
         # Execute the full model closure, processing each model once all of
         # its dependencies are ready.

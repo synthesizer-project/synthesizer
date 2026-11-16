@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 from unyt import K, Msun
 
-from synthesizer import GRID_DIR
+from synthesizer import GRID_DIR, exceptions
 from synthesizer.emission_models import (
     DustEmission,
     EmissionModel,
@@ -356,6 +356,43 @@ class TestThreadedParity:
             lines["blackbody"].lam,
             lines["incident"].lam,
         )
+
+    def test_lines_existing_mismatch_raises(
+        self, no_gil, test_grid, random_part_stars
+    ):
+        """Test reused lines must hold the requested lines without extraction.
+
+        With no extraction in the tree the line wavelengths come from the
+        reused lines, so a collection holding different lines is rejected.
+        """
+        # Generate incident lines for 3 lines to reuse
+        line_ids = test_grid.available_lines[:3]
+        random_part_stars.clear_all_emissions()
+        incident = random_part_stars.get_lines(
+            line_ids,
+            IncidentEmission(test_grid, label="incident"),
+        )
+
+        # Combine a generator with the reused incident lines (no extraction)
+        dust = DustEmission(
+            Blackbody(temperature=1e4 * K),
+            emitter="stellar",
+            label="blackbody",
+        )
+        model = EmissionModel(
+            "total",
+            combine=(dust, "incident"),
+            emitter="stellar",
+        )
+
+        # Requesting only 2 of the 3 reused lines should raise
+        with pytest.raises(exceptions.InconsistentArguments):
+            model._get_lines(
+                line_ids[:2],
+                {"stellar": random_part_stars},
+                lines={"incident": incident},
+                nr_model_threads=4,
+            )
 
     def test_vel_shifted_flags(self, no_gil, varied_model, random_part_stars):
         """Test velocity shift flags propagate as they do in serial."""
