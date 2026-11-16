@@ -11,7 +11,7 @@ Tests cover:
 import numpy as np
 import pytest
 from scipy.integrate import quad
-from unyt import Msun, Myr, dimensionless, kpc, yr
+from unyt import Gyr, Msun, Myr, dimensionless, kpc, yr
 
 import synthesizer.parametric.stars as stars_module
 from synthesizer import exceptions
@@ -548,6 +548,29 @@ class TestGetAtEarlierTime:
         expected = sfzh_stars.sfzh[sfzh_stars.ages > offset].sum()
         assert np.isclose(earlier.sfzh.sum(), expected)
 
+    def test_earlier_time_on_axis_point(self, sfzh_stars):
+        """Test that an offset on an age point keeps that point's mass.
+
+        The point then has an age of exactly zero, however the offset
+        reached years (a unit round trip can move it by a round off).
+
+        Args:
+            sfzh_stars (Stars):
+                The explicit SFZH Stars fixture.
+        """
+        # Loop over offsets lying on each of the age points
+        ages = sfzh_stars.ages.to_value(yr)
+        for age in ages:
+            # Rewind by the offset after a round trip through Gyr
+            offset = (age / 1e9) * Gyr
+            mass = sfzh_stars.calculate_initial_mass_at_age(offset)
+
+            # The points at least as old as the offset had formed by then
+            expected = sfzh_stars.sfzh[ages >= age].sum()
+            assert np.isclose(mass.to_value(Msun), expected), (
+                f"An offset of {age} yr kept the wrong points"
+            )
+
 
 class TestAddition:
     """Tests for adding parametric Stars and Galaxies."""
@@ -919,6 +942,49 @@ class TestMask:
                 # It must be the mass of the points passing the condition
                 assert np.isclose(masked.sum(), npass * point_mass), (
                     f"log10ages {op} {log10age} kept the wrong points"
+                )
+
+    def test_threshold_on_burst(self, test_grid):
+        """A log10 age threshold on a burst must act as for a particle.
+
+        A burst lies between the age points, where the round off made
+        turning the log10 threshold linear is largest relative to the age.
+
+        Args:
+            test_grid (Grid):
+                The test grid fixture.
+        """
+        # Loop over bursts at a range of ages
+        for age in np.arange(105.0, 3000.0, 97.0):
+            # Make the burst
+            burst = Stars(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                sf_hist=age * Myr,
+                metal_dist=0.01,
+                initial_mass=1 * Msun,
+            )
+            total = burst.sfzh.sum()
+
+            # Mask at exactly the burst's log10 age with every operator a
+            # range can express
+            thresh = float(np.log10(age * 1e6))
+            for op, passes in (
+                ("<=", True),
+                ("<", False),
+                (">=", True),
+                (">", False),
+                ("==", True),
+            ):
+                # Get the mass passing the mask
+                mask = burst.get_mask("log10ages", thresh, op)
+                masked = burst._bins_to_axes(
+                    burst._bin_edges, burst.bin_masses, mask=mask
+                )
+
+                # It must be all or none of the burst
+                assert np.isclose(masked.sum(), total if passes else 0.0), (
+                    f"log10ages {op} log10({age} Myr) kept the wrong mass"
                 )
 
     def test_invalid_masks_raise(self, stars):

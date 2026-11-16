@@ -626,7 +626,8 @@ class Stars(StarsComponent):
         are shifted to younger ages by the offset. Mass that had not yet
         formed (ages below zero after the shift) is dropped, keeping the
         fraction of any bin the offset cuts through, and the remaining bins
-        are mapped onto the age and metallicity axes.
+        are mapped onto the age and metallicity axes. Mass exactly at the
+        offset is kept, with an age of zero.
 
         Args:
             age_offset (unyt_quantity):
@@ -645,18 +646,16 @@ class Stars(StarsComponent):
 
         # Otherwise, shift the existing bins to the earlier time.
         else:
-            # Shift the age edges to younger ages by the offset
+            # Shift the age edges to younger ages by the offset, snapping
+            # the offset onto an edge it matches so that edge lands exactly
+            # on zero rather than a round off either side of it
             edges = dict(self._bin_edges)
-            edges["ages"] = (
-                self._bin_edges["ages"]
-                - convert_in_place(age_offset, yr).value
+            edges["ages"] = self._bin_edges["ages"] - self._snap_to_bin_edge(
+                "ages", convert_in_place(age_offset, yr).value
             )
 
             # Mask out the mass that hadn't formed yet (negative ages)
-            mask = np.empty((len(self.bin_axes), 2))
-            mask[:, 0] = -_MASK_BOUND
-            mask[:, 1] = _MASK_BOUND
-            mask[self.bin_axes.index("ages"), 0] = 0.0
+            mask = self.get_mask("ages", 0 * yr, ">=")
 
             # Map what remains onto the axes (the masses are already
             # normalised)
@@ -1022,7 +1021,7 @@ class Stars(StarsComponent):
         if attr.startswith("log10"):
             if isinstance(thresh, unyt_quantity):
                 thresh = thresh.ndview
-            value = 10 ** float(thresh)
+            return self._snap_to_bin_edge(axis, float(thresh), log=True)
 
         # Otherwise convert any units to the edge units (only the ages have
         # units, stored in yr)
@@ -1041,17 +1040,47 @@ class Stars(StarsComponent):
         else:
             value = float(thresh)
 
-        # Snap the threshold onto a bin edge it matches to within round off.
-        # The edges and the threshold reach linear units by different routes
-        # (e.g. 10**log10age), which can differ in the last bit, and that
-        # would put a zero width bin exactly on the threshold on the wrong
-        # side of it
+        return self._snap_to_bin_edge(axis, value)
+
+    def _snap_to_bin_edge(self, axis, value, log=False):
+        """Snap a value onto a bin edge it matches to within round off.
+
+        The edges and the value reach linear units by different routes (e.g.
+        10**log10age or a unit conversion), which can differ in the last few
+        bits. That would put a zero width bin lying exactly on the value on
+        the wrong side of it, so a value matching an edge becomes that edge.
+
+        The comparison is made in the space the value was given in, since a
+        round off in a log10 value is amplified when it is made linear.
+
+        Args:
+            axis (str):
+                The bin axis to snap onto (e.g. "ages").
+            value (float):
+                The value, in the units of the axis' bin edges (or their
+                log10 if log is True).
+            log (bool):
+                Whether the value is the log10 of a point on the axis.
+
+        Returns:
+            float:
+                The value in the linear units of the axis' bin edges, equal
+                to a bin edge if it matched one.
+        """
+        # Get the linear value and the edges either side of it
+        linear = 10**value if log else value
         edges = self._bin_edges[axis]
-        upper = min(np.searchsorted(edges, value), edges.size - 1)
+        upper = min(np.searchsorted(edges, linear), edges.size - 1)
+
+        # Return an edge the value matches to within a few floating point
+        # steps (an edge at zero has no log10 to match)
+        tol = 4 * np.spacing(abs(value))
         for edge in (edges[max(upper - 1, 0)], edges[upper]):
-            if abs(edge - value) <= 4 * np.finfo(np.float64).eps * abs(value):
+            if log and edge <= 0:
+                continue
+            if abs((np.log10(edge) if log else edge) - value) <= tol:
                 return float(edge)
-        return value
+        return linear
 
     def calculate_median_age(self):
         """Calculate the median age of the stellar population."""
