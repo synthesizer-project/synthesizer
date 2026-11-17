@@ -11,6 +11,7 @@ from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
+    optically_thin_luminosity,
 )
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.units import accepts
@@ -165,8 +166,8 @@ class Blackbody(DustEmission):
         # Create an SED object for convenience
         sed = Sed(lam=lams, lnu=lnu)
 
-        # Get the bolometric luminosity with proper units
-        bol_lum = sed._bolometric_luminosity
+        # Get the bolometric luminosity over all frequencies
+        bol_lum = optically_thin_luminosity(temperature)
 
         # Normalise the blackbody spectrum
         sed._lnu /= bol_lum
@@ -237,8 +238,6 @@ class Blackbody(DustEmission):
                 "missing. Please generate spectra first or remove the "
                 "generation of lines."
             )
-        else:
-            sed = spectra[model.label]
 
         # Get the required parameters
         params = self._extract_params(model, emitter)
@@ -248,7 +247,6 @@ class Blackbody(DustEmission):
 
         # Define frequencies
         nu = (c / line_lams).to(Hz)
-        sed_nu = sed.nu
 
         # Account for CMB heating
         cmb_factor, temperature = self.apply_cmb_heating(
@@ -259,13 +257,9 @@ class Blackbody(DustEmission):
 
         # Compute the planck function
         lnu = planck(nu, temperature)
-        norm_lnu = planck(sed_nu, temperature)
 
-        # Create an SED object for convenience
-        norm_sed = Sed(lam=sed.lam, lnu=norm_lnu)
-
-        # Get the bolometric luminosity with proper units
-        bol_lum = norm_sed._bolometric_luminosity
+        # Get the bolometric luminosity over all frequencies
+        bol_lum = optically_thin_luminosity(temperature)
 
         # Normalise the blackbody spectrum
         lnu /= bol_lum

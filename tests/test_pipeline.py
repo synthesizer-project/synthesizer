@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from astropy.cosmology import Planck18 as cosmo
 from synthesizer.extensions.timers import reset_timings, tic, toc
-from unyt import Mpc, Myr, angstrom, kpc, unyt_array
+from unyt import Hz, Mpc, Myr, angstrom, erg, kpc, s, unyt_array
 
 from synthesizer import GRID_DIR, check_atomic_timing, exceptions
 from synthesizer.base_galaxy import BaseGalaxy
@@ -19,7 +19,13 @@ from synthesizer.emission_models import PacmanEmission
 from synthesizer.emission_models.transformers import PowerLaw
 from synthesizer.emissions import Sed
 from synthesizer.grid import Grid
-from synthesizer.instruments import FilterCollection, Instrument
+from synthesizer.instruments import (
+    FilterCollection,
+    Instrument,
+    IntegratedFieldUnit,
+    SpectroscopicInstrument,
+)
+from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 from synthesizer.particle.stars import Stars
 from synthesizer.pipeline.pipeline import Pipeline
 from synthesizer.pipeline.pipeline_utils import (
@@ -461,6 +467,25 @@ class TestPipelineInit:
 
         # A rank without galaxies must still reduce this timing
         assert pipeline._op_timing["Extra"] == 0.0
+
+    def test_analysis_func_error_names_key(self, nebular_emission_model):
+        """Analysis errors name the function, whatever their signature."""
+
+        # An error which can't be rebuilt from a single message
+        class TwoArgError(Exception):
+            def __init__(self, a, b):
+                super().__init__(f"{a} {b}")
+
+        def fail(gal):
+            raise TwoArgError("real", "cause")
+
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.add_analysis_func(fail, "Broken")
+
+        # The key and the original error should both reach the user
+        with pytest.raises(RuntimeError, match="Broken: real cause") as exc:
+            pipeline._run_extra_analysis(SimpleNamespace())
+        assert isinstance(exc.value.__cause__, TwoArgError)
 
 
 class TestPipelineTimingAnalysis:
@@ -967,6 +992,118 @@ class TestPipelineOperations:
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.fluxes) > 0
         ), "No fluxes were calculated"
+
+    def test_pipeline_spectroscopy_frames(self, base_pipeline):
+        """Test the pipeline's rest and observer frame spectroscopy steps.
+
+        The lnu and fnu operations must each fill their own galaxy
+        dictionary, on the rest and observer frame grids respectively.
+        """
+        # A galaxy holding a spectrum observed at z=1, stored under the
+        # emission model's label so the pipeline accepts it
+        label = base_pipeline.emission_model.label
+        z = 1.0
+        lam = np.linspace(1000.0, 20000.0, 1000) * angstrom
+        sed = Sed(lam, np.ones(lam.size) * erg / s / Hz)
+        sed.get_fnu(cosmo, z)
+        gal = ParticleGalaxy(redshift=z)
+        gal.spectra[label] = sed
+
+        # Request both kinds of spectroscopy with the same instrument
+        inst = SpectroscopicInstrument(
+            "spec",
+            lam=np.linspace(4000.0, 8000.0, 100) * angstrom,
+        )
+        base_pipeline.get_spectroscopy_lnu(inst, labels=label)
+        base_pipeline.get_spectroscopy_fnu(inst, labels=label, cosmo=cosmo)
+
+        # Run the per-galaxy spectroscopy steps
+        base_pipeline._get_spectroscopy_lnu(gal)
+        base_pipeline._get_spectroscopy_fnu(gal)
+
+        # Each operation filled its own dictionary on the right frame's
+        # wavelengths, and was counted
+        np.testing.assert_allclose(
+            gal.spectroscopy_lnu["spec"][label].lam, inst.lam
+        )
+        np.testing.assert_allclose(
+            gal.spectroscopy_fnu["spec"][label].obslam, inst.lam
+        )
+        assert base_pipeline._op_counts["Spectroscopy Lnu"] == 1
+        assert base_pipeline._op_counts["Spectroscopy Fnu"] == 1
+
+    def test_pipeline_writes_spectroscopy(
+        self, pipeline_with_galaxies, tmp_path
+    ):
+        """Test the pipeline writes rest and observer frame spectroscopy.
+
+        Each spectra type should be written for every galaxy on the
+        instrument's wavelength grid, under the instrument's label.
+        """
+        # Request both kinds of spectroscopy and write them out
+        inst = SpectroscopicInstrument(
+            "spec",
+            lam=np.linspace(4000.0, 8000.0, 100) * angstrom,
+        )
+        ngal = len(pipeline_with_galaxies.galaxies)
+        pipeline_with_galaxies.get_spectroscopy_lnu(inst)
+        pipeline_with_galaxies.get_spectroscopy_fnu(inst, cosmo=cosmo)
+        pipeline_with_galaxies.run()
+        output = tmp_path / "spectroscopy.hdf5"
+        pipeline_with_galaxies.write(output)
+
+        # Both frames are written with one spectrum per galaxy per type (this
+        # emission model only produces stellar spectra)
+        with h5py.File(output) as hdf:
+            for name in (
+                "SpectralLuminosityDensities",
+                "SpectralFluxDensities",
+            ):
+                group = hdf[f"Galaxies/Stars/Spectroscopy/{name}/spec"]
+                assert len(group) > 0
+                for spec_type in group:
+                    assert group[spec_type].shape == (ngal, inst.lam.size)
+
+    def test_pipeline_writes_data_cubes(
+        self,
+        pipeline_with_galaxies_per_particle,
+        tmp_path,
+    ):
+        """Test the pipeline writes rest and observer frame data cubes.
+
+        Each spectra type should be written for every galaxy as a cube on
+        the IFU's wavelength grid, under the IFU's label.
+        """
+        # Request both kinds of data cube and write them out
+        ifu = IntegratedFieldUnit(
+            label="ifu",
+            lam=np.linspace(4000.0, 8000.0, 20) * angstrom,
+            resolution=1 * kpc,
+        )
+        ngal = len(pipeline_with_galaxies_per_particle.galaxies)
+        pipeline_with_galaxies_per_particle.get_data_cubes_lnu(
+            ifu, fov=10 * kpc, cube_type="hist"
+        )
+        pipeline_with_galaxies_per_particle.get_data_cubes_fnu(
+            ifu, fov=10 * kpc, cube_type="hist", cosmo=cosmo
+        )
+        pipeline_with_galaxies_per_particle.run()
+        output = tmp_path / "data_cubes.hdf5"
+        pipeline_with_galaxies_per_particle.write(output)
+
+        # Both frames are written with one cube per galaxy per type (this
+        # emission model only produces stellar spectra)
+        with h5py.File(output) as hdf:
+            for name in (
+                "SpectralLuminosityDensities",
+                "SpectralFluxDensities",
+            ):
+                group = hdf[f"Galaxies/Stars/DataCubes/{name}/ifu"]
+                assert len(group) > 0
+                for spec_type in group:
+                    shape = group[spec_type].shape
+                    assert shape[0] == ngal
+                    assert shape[-1] == ifu.lam.size
 
     def test_run_pipeline_lines(
         self,
@@ -3337,6 +3474,80 @@ def test_combine_rank_files_virtual_units_mismatch(tmp_path):
 
     with pytest.raises(ValueError, match="units"):
         io.combine_rank_files_virtual()
+
+
+def _rank0_writer(tmp_path, starts, ends):
+    """Return a PipelineIO set up as rank 0 of 2 would be after writing."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 2, 0, True
+    io.num_galaxies, io.start, io.end = ends[-1], starts[0], ends[0]
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([starts, ends])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+    return io
+
+
+@pytest.mark.parametrize("virtual", [False, True])
+def test_failed_combine_keeps_existing_output(tmp_path, virtual):
+    """A failed combine must not leave misleading output behind.
+
+    An existing copied file is kept untouched. An existing virtual file is
+    removed, since it points at the rank files this run has overwritten.
+    """
+    # An existing, valid combined file from an earlier run
+    with h5py.File(tmp_path / "out.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Lum", data=np.full((2, 3), 7.0))
+
+    # Rank files which can't be combined (different units for the virtual
+    # file, rows which don't fit the dataset rank 0 created for the copy)
+    for rank, (units, ncols) in enumerate((("erg/s", 1), ("W", 3))):
+        with h5py.File(tmp_path / f"out_{rank}.hdf5", "w") as hdf:
+            dset = hdf.create_dataset(
+                "Galaxies/Lum",
+                data=np.ones((1, 3 if virtual else ncols)),
+            )
+            dset.attrs["Units"] = units if virtual else "erg/s"
+
+    # Combining should fail
+    io = _rank0_writer(tmp_path, [0, 1], [1, 2])
+    with pytest.raises((ValueError, TypeError)):
+        if virtual:
+            io.combine_rank_files_virtual()
+        else:
+            io.combine_rank_files()
+
+    # The earlier copied output survives (an earlier virtual file is gone)
+    # and no temporary file is left behind
+    if virtual:
+        assert not (tmp_path / "out.hdf5").exists()
+    else:
+        with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
+            np.testing.assert_array_equal(hdf["Galaxies/Lum"][...], 7.0)
+    assert not (tmp_path / "out.hdf5.tmp").exists()
+
+
+def test_combine_replaces_existing_output(tmp_path):
+    """A successful combine replaces an existing combined file."""
+    # An existing combined file from an earlier run
+    with h5py.File(tmp_path / "out.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Lum", data=np.full((2, 3), 7.0))
+
+    # Rank files which combine cleanly
+    for rank in range(2):
+        with h5py.File(tmp_path / f"out_{rank}.hdf5", "w") as hdf:
+            hdf.create_dataset("Galaxies/Lum", data=np.full((1, 3), rank))
+
+    _rank0_writer(tmp_path, [0, 1], [1, 2]).combine_rank_files()
+
+    # The new rows replace the old file
+    with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lum"][...], [[0, 0, 0], [1, 1, 1]]
+        )
+    assert not (tmp_path / "out.hdf5.tmp").exists()
 
 
 def test_parametric_sfh_rebinned_onto_requested_ages(

@@ -41,5 +41,12 @@ static struct PyModuleDef openmpmodule = {
 };
 
 PyMODINIT_FUNC PyInit_openmp_check(void) {
-  return PyModule_Create(&openmpmodule);
+  PyObject *m = PyModule_Create(&openmpmodule);
+  if (m == NULL) return NULL;
+  /* Declare the module safe to use without the GIL so importing it doesn't
+   * re-enable the GIL on free-threaded builds of Python. */
+#ifdef Py_GIL_DISABLED
+  PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED);
+#endif
+  return m;
 }

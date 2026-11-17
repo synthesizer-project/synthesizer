@@ -15,6 +15,7 @@ Example usage:
 
 import os
 import time
+from contextlib import contextmanager
 
 import h5py
 import numpy as np
@@ -35,6 +36,34 @@ _SHARED_AXIS_GROUPS = (
     "/Galaxies/Stars/SFZHAxes",
     "/Galaxies/Stars/SFHAxes",
 )
+
+
+@contextmanager
+def _hdf5_replaced_on_success(path):
+    """Open an HDF5 file for writing which only replaces path on success.
+
+    The file is written to a temporary path next to path, so a failure while
+    writing leaves any existing file at path untouched, rather than an
+    incomplete file which looks valid.
+
+    Args:
+        path (str): The path the file should end up at.
+
+    Yields:
+        h5py.File: The open file to write to.
+    """
+    temp_path = f"{path}.tmp"
+    try:
+        with h5py.File(temp_path, "w") as hdf:
+            yield hdf
+
+        # Everything was written (and the file closed), so swap it in
+        os.replace(temp_path, path)
+    except BaseException:
+        # Clean up the incomplete file before re-raising
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise
 
 
 class PipelineIO:
@@ -585,8 +614,9 @@ class PipelineIO:
         new_path = "_".join(path_no_ext.split("_")[:-1]) + f".{ext}"
         temp_path = "_".join(path_no_ext.split("_")[:-1]) + "_<rank>.hdf5"
 
-        # Open the output file
-        with h5py.File(new_path, "w") as hdf:
+        # Open the output file (any existing file is only replaced once the
+        # new one is complete)
+        with _hdf5_replaced_on_success(new_path) as hdf:
             # Loop over each rank file
             for rank in range(self.size):
                 # Open the rank file
@@ -639,7 +669,9 @@ class PipelineIO:
         temp_path = "_".join(path_no_ext.split("_")[:-1]) + "_<rank>.hdf5"
         new_path = "_".join(path_no_ext.split("_")[:-1]) + f".{ext}"
 
-        # Remove the old combined file if it exists
+        # Remove any old virtual file. Unlike a copied file it can't be kept
+        # if this combine fails, since it points at the rank files this run
+        # has already overwritten
         if os.path.exists(new_path):
             os.remove(new_path)
 
@@ -694,8 +726,9 @@ class PipelineIO:
                     gather_datasets(rank_f["Galaxies"], "/Galaxies/")
                     gather_groups(rank_f["Galaxies"], "/Galaxies/")
 
-            # Create the virtual file
-            with h5py.File(new_path, "w") as hdf:
+            # Create the virtual file (any existing file is only replaced
+            # once the new one is complete)
+            with _hdf5_replaced_on_success(new_path) as hdf:
                 for attr in f0.attrs:
                     hdf.attrs[attr] = f0.attrs[attr]
 
