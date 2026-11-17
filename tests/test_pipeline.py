@@ -35,6 +35,7 @@ from synthesizer.pipeline.pipeline_utils import (
     discover_attr_paths_recursive,
     discover_dict_recursive,
     discover_dict_structure,
+    get_buffered_nbytes,
     get_dataset_properties,
     get_full_memory,
     unify_dict_structure_across_ranks,
@@ -624,7 +625,7 @@ class TestPipelineNotReady:
         """Later get_lines calls must request a subset of the first call."""
         base_pipeline.get_lines(line_ids=["Ha"])
         base_pipeline.get_lines(line_ids=["H 1 6562.80A"], write=False)
-        assert base_pipeline.line_ids == ["Ha"]
+        assert base_pipeline.io_buffers.line_ids == ["Ha"]
         with pytest.raises(exceptions.InconsistentArguments):
             base_pipeline.get_lines(line_ids=["Hb"])
 
@@ -854,7 +855,9 @@ class TestPipelineOperations:
             "Spectra not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.lnu_spectra)
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.lnu_spectra
+            )
             > 0
         ), "No spectra were calculated"
 
@@ -903,7 +906,9 @@ class TestPipelineOperations:
             "Spectra not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.fnu_spectra)
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.fnu_spectra
+            )
             > 0
         ), "No spectra were calculated"
 
@@ -914,13 +919,22 @@ class TestPipelineOperations:
         """Galaxy fluxes are stacked in place, not under a stray key."""
         pipeline = pipeline_with_galaxies
         spec = unyt_array([1.0, 2.0], "erg/s/cm**2/Hz")
-        pipeline.fnu_spectra["Galaxy"]["total"] = [spec, spec]
+        pipeline.io_buffers.fnu_spectra["Galaxy"]["total"] = [spec, spec]
 
         pipeline._clean_outputs()
 
-        assert set(pipeline.fnu_spectra) == {"Galaxy", "Stars", "BlackHole"}
-        assert isinstance(pipeline.fnu_spectra["Galaxy"]["total"], unyt_array)
-        assert pipeline.fnu_spectra["Galaxy"]["total"].shape == (2, 2)
+        assert set(pipeline.io_buffers.fnu_spectra) == {
+            "Galaxy",
+            "Stars",
+            "BlackHole",
+        }
+        assert isinstance(
+            pipeline.io_buffers.fnu_spectra["Galaxy"]["total"], unyt_array
+        )
+        assert pipeline.io_buffers.fnu_spectra["Galaxy"]["total"].shape == (
+            2,
+            2,
+        )
 
     def test_run_pipeline_photometry_lums(
         self,
@@ -940,7 +954,9 @@ class TestPipelineOperations:
             "Luminosities not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.luminosities)
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.luminosities
+            )
             > 0
         ), "No luminosities were calculated"
 
@@ -990,7 +1006,10 @@ class TestPipelineOperations:
             "Fluxes not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.fluxes) > 0
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.fluxes
+            )
+            > 0
         ), "No fluxes were calculated"
 
     def test_pipeline_spectroscopy_frames(self, base_pipeline):
@@ -1053,16 +1072,18 @@ class TestPipelineOperations:
         pipeline_with_galaxies.write(output)
 
         # Both frames are written with one spectrum per galaxy per type (this
-        # emission model only produces stellar spectra)
+        # emission model only produces stellar spectra), each in its own
+        # frame's units
         with h5py.File(output) as hdf:
-            for name in (
-                "SpectralLuminosityDensities",
-                "SpectralFluxDensities",
+            for name, units in (
+                ("SpectralLuminosityDensities", "erg/(Hz*s)"),
+                ("SpectralFluxDensities", "nJy"),
             ):
                 group = hdf[f"Galaxies/Stars/Spectroscopy/{name}/spec"]
                 assert len(group) > 0
                 for spec_type in group:
                     assert group[spec_type].shape == (ngal, inst.lam.size)
+                    assert group[spec_type].attrs["Units"] == units
 
     def test_pipeline_writes_data_cubes(
         self,
@@ -1123,19 +1144,21 @@ class TestPipelineOperations:
             "Lines not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.line_lums)
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.line_lums
+            )
             > 0
         ), "No line luminosities were calculated"
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies.line_cont_lums
+                pipeline_with_galaxies.io_buffers.line_cont_lums
             )
             > 0
         ), "No line continua were calculated"
-        assert pipeline_with_galaxies.line_lams is not None, (
+        assert pipeline_with_galaxies.io_buffers.line_lams is not None, (
             "Line wavelengths not calculated"
         )
-        assert pipeline_with_galaxies.line_ids is not None, (
+        assert pipeline_with_galaxies.io_buffers.line_ids is not None, (
             "Line IDs not included"
         )
 
@@ -1160,16 +1183,18 @@ class TestPipelineOperations:
             "Lines not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.line_fluxes)
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.line_fluxes
+            )
             > 0
         ), "No line fluxes were calculated"
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies.line_cont_fluxes
+                pipeline_with_galaxies.io_buffers.line_cont_fluxes
             )
             > 0
         ), "No line continua were calculated"
-        assert pipeline_with_galaxies.line_obs_lams is not None, (
+        assert pipeline_with_galaxies.io_buffers.line_obs_lams is not None, (
             "Line wavelengths not calculated"
         )
 
@@ -1219,33 +1244,67 @@ class TestPipelineOperations:
         """Rank 0 gets a value held only by another rank."""
         # Pretend to be one rank of two where only rank 1 has the value
         pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
-        pipeline.using_mpi = True
-        pipeline.rank = rank
-        pipeline.comm = MagicMock()
-        pipeline.comm.gather.return_value = [None, "lams"]
+        io_helper = pipeline.io_helper
+        io_helper.is_parallel = True
+        io_helper.rank = rank
+        io_helper.comm = MagicMock()
+        io_helper.comm.gather.return_value = [None, "lams"]
 
         # Only rank 0 receives the value, gathered rather than allgathered
-        result = pipeline._first_from_any_rank("lams" if rank else None)
+        result = io_helper._first_from_any_rank("lams" if rank else None)
         assert result == ("lams" if rank == 0 else None)
-        pipeline.comm.gather.assert_called_once()
-        pipeline.comm.allgather.assert_not_called()
-
-    def test_first_from_any_rank_all_ranks(self, nebular_emission_model):
-        """Every rank gets the value with all_ranks=True."""
-        # Pretend to be a non-root rank without the value
-        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
-        pipeline.using_mpi = True
-        pipeline.rank = 1
-        pipeline.comm = MagicMock()
-        pipeline.comm.allgather.return_value = [None, "props", "other"]
-
-        # The first value which isn't None is returned on this rank too
-        assert pipeline._first_from_any_rank(None, all_ranks=True) == "props"
+        io_helper.comm.gather.assert_called_once()
+        io_helper.comm.allgather.assert_not_called()
 
     def test_first_from_any_rank_without_mpi(self, nebular_emission_model):
         """Without MPI the rank's own value is returned."""
         pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
-        assert pipeline._first_from_any_rank("lams") == "lams"
+        assert pipeline.io_helper._first_from_any_rank("lams") == "lams"
+
+    def test_write_data_cubes_and_spectroscopy(
+        self, kernel, pipeline_with_galaxies_per_particle, tmp_path
+    ):
+        """Data cubes and spectroscopy are written with a row per galaxy."""
+        # Give the IFU a PSF so we also get processed cubes
+        lam = np.logspace(3, 4, 10) * angstrom
+        psf = np.ones((3, 3)) / 9
+        ifu = IntegratedFieldUnit(
+            label="IFU",
+            lam=lam,
+            resolution=1 * kpc,
+            psfs=psf,
+            psf_pixel_scale=1 * kpc,
+        )
+        spectrometer = SpectroscopicInstrument(label="Spec", lam=lam)
+
+        # Request every flavour of data cube and spectroscopy
+        pipeline = pipeline_with_galaxies_per_particle
+        pipeline.get_data_cubes_lnu(ifu, kernel=kernel, fov=10 * kpc)
+        pipeline.get_data_cubes_fnu(
+            ifu, kernel=kernel, fov=10 * kpc, cosmo=cosmo
+        )
+        pipeline.get_spectroscopy_lnu(spectrometer)
+        pipeline.get_spectroscopy_fnu(spectrometer, cosmo=cosmo)
+        output = tmp_path / "ifu.hdf5"
+        pipeline.write(output)
+
+        # Each should have a row per galaxy sampled on the instrument's
+        # wavelengths
+        ngal = pipeline.n_galaxies_local
+        with h5py.File(output) as hdf:
+            for path in (
+                "DataCubes/SpectralLuminosityDensities/IFU",
+                "DataCubes/SpectralFluxDensities/IFU",
+                "ProcessedDataCubes/SpectralLuminosityDensities/IFU",
+                "ProcessedDataCubes/SpectralFluxDensities/IFU",
+                "Spectroscopy/SpectralLuminosityDensities/Spec",
+                "Spectroscopy/SpectralFluxDensities/Spec",
+            ):
+                group = hdf[f"Galaxies/Stars/{path}"]
+                assert len(group) > 0
+                for dset in group.values():
+                    assert dset.shape[0] == ngal
+                    assert dset.shape[-1] == len(lam)
 
     def test_run_pipeline_lines_luminosity_subset(
         self,
@@ -1265,23 +1324,26 @@ class TestPipelineOperations:
             "Lines not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.line_lums)
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.line_lums
+            )
             > 0
         ), "No line luminosities were calculated"
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies.line_cont_lums
+                pipeline_with_galaxies.io_buffers.line_cont_lums
             )
             > 0
         ), "No line continua were calculated"
-        assert pipeline_with_galaxies.line_lams is not None, (
+        assert pipeline_with_galaxies.io_buffers.line_lams is not None, (
             "Line wavelengths not calculated"
         )
-        assert pipeline_with_galaxies.line_ids is not None, (
+        assert pipeline_with_galaxies.io_buffers.line_ids is not None, (
             "Line IDs not included"
         )
         assert np.all(
-            pipeline_with_galaxies.line_ids == test_grid.available_lines[:10]
+            pipeline_with_galaxies.io_buffers.line_ids
+            == test_grid.available_lines[:10]
         ), "Line IDs do not match requested subset"
 
     def test_run_pipeline_images_luminosity(
@@ -1308,7 +1370,7 @@ class TestPipelineOperations:
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_lum
+                pipeline_with_galaxies_per_particle.io_buffers.images_lum
             )
             > 0
         ), "No images were calculated"
@@ -1339,7 +1401,7 @@ class TestPipelineOperations:
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_flux
+                pipeline_with_galaxies_per_particle.io_buffers.images_flux
             )
             > 0
         ), "No images were calculated"
@@ -1368,13 +1430,13 @@ class TestPipelineOperations:
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_lum_psf
+                pipeline_with_galaxies_per_particle.io_buffers.images_lum_psf
             )
             > 0
         ), "No images were calculated"
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_lum
+                pipeline_with_galaxies_per_particle.io_buffers.images_lum
             )
             > 0
         ), "Base images were removed"
@@ -1404,13 +1466,13 @@ class TestPipelineOperations:
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_flux_psf
+                pipeline_with_galaxies_per_particle.io_buffers.images_flux_psf
             )
             > 0
         ), "No images were calculated"
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_flux
+                pipeline_with_galaxies_per_particle.io_buffers.images_flux
             )
             > 0
         ), "Base images were removed"
@@ -1448,13 +1510,15 @@ class TestPipelineOperations:
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.line_maps_lum
+                pipeline_with_galaxies_per_particle.io_buffers.line_maps_lum
             )
             > 0
         ), "No line maps were calculated"
-        line_map = pipeline_with_galaxies_per_particle.line_maps_lum["Stars"][
-            "test_line_imager"
-        ]["nebular"][line_ids[0]]
+        line_map = (
+            pipeline_with_galaxies_per_particle.io_buffers.line_maps_lum[
+                "Stars"
+            ]["test_line_imager"]["nebular"][line_ids[0]]
+        )
         assert line_map.dtype == np.float32
 
         output = tmp_path / "line_maps_luminosity.hdf5"
@@ -1495,13 +1559,15 @@ class TestPipelineOperations:
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.line_maps_lum
+                pipeline_with_galaxies_per_particle.io_buffers.line_maps_lum
             )
             > 0
         ), "No line maps were calculated"
-        line_map = pipeline_with_galaxies_per_particle.line_maps_lum["Stars"][
-            "test_line_imager"
-        ]["nebular"][", ".join(line_ids[0])]
+        line_map = (
+            pipeline_with_galaxies_per_particle.io_buffers.line_maps_lum[
+                "Stars"
+            ]["test_line_imager"]["nebular"][", ".join(line_ids[0])]
+        )
         assert line_map.dtype == np.float32
 
         output = tmp_path / "blended_line_maps.hdf5"
@@ -1544,13 +1610,15 @@ class TestPipelineOperations:
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.line_maps_flux
+                pipeline_with_galaxies_per_particle.io_buffers.line_maps_flux
             )
             > 0
         ), "No flux line maps were calculated"
-        line_map = pipeline_with_galaxies_per_particle.line_maps_flux["Stars"][
-            "test_line_imager_flux"
-        ]["nebular"][line_ids[0]]
+        line_map = (
+            pipeline_with_galaxies_per_particle.io_buffers.line_maps_flux[
+                "Stars"
+            ]["test_line_imager_flux"]["nebular"][line_ids[0]]
+        )
         assert line_map.dtype == np.float32
 
         output = tmp_path / "line_maps_flux.hdf5"
@@ -1579,7 +1647,10 @@ class TestPipelineOperations:
             "SFZH not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.sfzhs) > 0
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.sfzhs
+            )
+            > 0
         ), "No SFZH was calculated"
 
     def test_run_pipeline_sfh(
@@ -1598,7 +1669,10 @@ class TestPipelineOperations:
         )
         assert pipeline_with_galaxies._write_sfh, "SFH not flagged for writing"
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.sfhs) > 0
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.sfhs
+            )
+            > 0
         ), "No SFH was calculated"
 
     def test_write_sfzh_and_sfh_particle(
@@ -2460,7 +2534,9 @@ class TestAngularCoordinates:
         assert pipeline_with_galaxies_per_particle._analysis_complete
 
         # Verify images were created
-        assert len(pipeline_with_galaxies_per_particle.images_lum) > 0
+        assert (
+            len(pipeline_with_galaxies_per_particle.io_buffers.images_lum) > 0
+        )
 
     def test_cartesian_resolution_without_cosmo(
         self,
@@ -2512,7 +2588,9 @@ class TestAngularCoordinates:
         assert pipeline_with_galaxies_per_particle._analysis_complete
 
         # Verify images were created
-        assert len(pipeline_with_galaxies_per_particle.images_lum) > 0
+        assert (
+            len(pipeline_with_galaxies_per_particle.io_buffers.images_lum) > 0
+        )
 
     def test_angular_resolution_missing_cosmo_raises_error(
         self,
@@ -3011,10 +3089,10 @@ class TestGalaxySplitting:
             pipeline.get_sfh(log10ages=test_grid.log10ages)
             pipeline.run()
 
-        assert any(unsplit_pipeline.cosmic_lnus.values())
-        assert any(unsplit_pipeline.cosmic_fnus.values())
-        assert any(split_pipeline.cosmic_lnus.values())
-        assert any(split_pipeline.cosmic_fnus.values())
+        assert any(unsplit_pipeline.io_buffers.cosmic_lnus.values())
+        assert any(unsplit_pipeline.io_buffers.cosmic_fnus.values())
+        assert any(split_pipeline.io_buffers.cosmic_lnus.values())
+        assert any(split_pipeline.io_buffers.cosmic_fnus.values())
 
         for attr in (
             "lnu_spectra",
@@ -3025,8 +3103,8 @@ class TestGalaxySplitting:
             "sfhs",
         ):
             _assert_nested_allclose(
-                getattr(unsplit_pipeline, attr),
-                getattr(split_pipeline, attr),
+                getattr(unsplit_pipeline.io_buffers, attr),
+                getattr(split_pipeline.io_buffers, attr),
             )
 
     def test_cosmic_sed_average_and_volume(
@@ -3070,34 +3148,38 @@ class TestGalaxySplitting:
         )
         avg_pipeline.run()
 
-        assert any(sum_pipeline.cosmic_lnus.values())
-        assert any(sum_pipeline.cosmic_fnus.values())
-        assert any(avg_pipeline.cosmic_lnus.values())
-        assert any(avg_pipeline.cosmic_fnus.values())
+        assert any(sum_pipeline.io_buffers.cosmic_lnus.values())
+        assert any(sum_pipeline.io_buffers.cosmic_fnus.values())
+        assert any(avg_pipeline.io_buffers.cosmic_lnus.values())
+        assert any(avg_pipeline.io_buffers.cosmic_fnus.values())
 
-        for component in sum_pipeline.cosmic_lnus:
-            if "sum" not in sum_pipeline.cosmic_lnus[component]:
+        for component in sum_pipeline.io_buffers.cosmic_lnus:
+            if "sum" not in sum_pipeline.io_buffers.cosmic_lnus[component]:
                 continue
-            assert "avg" in avg_pipeline.cosmic_lnus[component]
-            for model_label, spec in sum_pipeline.cosmic_lnus[component][
-                "sum"
-            ].items():
+            assert "avg" in avg_pipeline.io_buffers.cosmic_lnus[component]
+            for model_label, spec in sum_pipeline.io_buffers.cosmic_lnus[
+                component
+            ]["sum"].items():
                 expected = spec / n_contributors / volume
                 _assert_nested_allclose(
-                    avg_pipeline.cosmic_lnus[component]["avg"][model_label],
+                    avg_pipeline.io_buffers.cosmic_lnus[component]["avg"][
+                        model_label
+                    ],
                     expected,
                 )
 
-        for component in sum_pipeline.cosmic_fnus:
-            if "sum" not in sum_pipeline.cosmic_fnus[component]:
+        for component in sum_pipeline.io_buffers.cosmic_fnus:
+            if "sum" not in sum_pipeline.io_buffers.cosmic_fnus[component]:
                 continue
-            assert "avg" in avg_pipeline.cosmic_fnus[component]
-            for model_label, spec in sum_pipeline.cosmic_fnus[component][
-                "sum"
-            ].items():
+            assert "avg" in avg_pipeline.io_buffers.cosmic_fnus[component]
+            for model_label, spec in sum_pipeline.io_buffers.cosmic_fnus[
+                component
+            ]["sum"].items():
                 expected = spec / n_contributors / volume
                 _assert_nested_allclose(
-                    avg_pipeline.cosmic_fnus[component]["avg"][model_label],
+                    avg_pipeline.io_buffers.cosmic_fnus[component]["avg"][
+                        model_label
+                    ],
                     expected,
                 )
 
@@ -3142,29 +3224,33 @@ class TestGalaxySplitting:
         )
         avg_pipeline.run()
 
-        for component in sum_pipeline.cosmic_lnus:
-            if "sum" not in sum_pipeline.cosmic_lnus[component]:
+        for component in sum_pipeline.io_buffers.cosmic_lnus:
+            if "sum" not in sum_pipeline.io_buffers.cosmic_lnus[component]:
                 continue
-            assert "dup" in avg_pipeline.cosmic_lnus[component]
-            for model_label, spec in sum_pipeline.cosmic_lnus[component][
-                "sum"
-            ].items():
+            assert "dup" in avg_pipeline.io_buffers.cosmic_lnus[component]
+            for model_label, spec in sum_pipeline.io_buffers.cosmic_lnus[
+                component
+            ]["sum"].items():
                 expected = spec / n_contributors
                 _assert_nested_allclose(
-                    avg_pipeline.cosmic_lnus[component]["dup"][model_label],
+                    avg_pipeline.io_buffers.cosmic_lnus[component]["dup"][
+                        model_label
+                    ],
                     expected,
                 )
 
-        for component in sum_pipeline.cosmic_fnus:
-            if "sum" not in sum_pipeline.cosmic_fnus[component]:
+        for component in sum_pipeline.io_buffers.cosmic_fnus:
+            if "sum" not in sum_pipeline.io_buffers.cosmic_fnus[component]:
                 continue
-            assert "dup" in avg_pipeline.cosmic_fnus[component]
-            for model_label, spec in sum_pipeline.cosmic_fnus[component][
-                "sum"
-            ].items():
+            assert "dup" in avg_pipeline.io_buffers.cosmic_fnus[component]
+            for model_label, spec in sum_pipeline.io_buffers.cosmic_fnus[
+                component
+            ]["sum"].items():
                 expected = spec / n_contributors
                 _assert_nested_allclose(
-                    avg_pipeline.cosmic_fnus[component]["dup"][model_label],
+                    avg_pipeline.io_buffers.cosmic_fnus[component]["dup"][
+                        model_label
+                    ],
                     expected,
                 )
 
@@ -3209,13 +3295,13 @@ class TestGalaxySplitting:
             pipeline.run()
 
         _assert_nested_allclose(
-            unsplit_pipeline.images_lum,
-            split_pipeline.images_lum,
+            unsplit_pipeline.io_buffers.images_lum,
+            split_pipeline.io_buffers.images_lum,
             rtol=3e-6,
         )
         _assert_nested_allclose(
-            unsplit_pipeline.images_flux,
-            split_pipeline.images_flux,
+            unsplit_pipeline.io_buffers.images_flux,
+            split_pipeline.io_buffers.images_flux,
             rtol=3e-6,
         )
 
@@ -3257,8 +3343,8 @@ class TestGalaxySplitting:
 
         for attr in ("lnu_spectra", "sfzhs", "sfhs"):
             _assert_nested_allclose(
-                getattr(unsplit_pipeline, attr),
-                getattr(split_pipeline, attr),
+                getattr(unsplit_pipeline.io_buffers, attr),
+                getattr(split_pipeline.io_buffers, attr),
             )
 
 
@@ -3597,26 +3683,6 @@ def test_reused_galaxy_sfzh_and_sfh_follow_new_axes(
     assert second._get_sfh(galaxy).shape == ages.shape
 
 
-def test_mass_grids_are_converted_to_msun(nebular_emission_model):
-    """Grids carrying mass units are converted, not just relabelled."""
-    from unyt import Msun
-
-    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
-
-    # A grid in units of 1e6 Msun is converted
-    grid = pipeline._mass_grid_in_msun(
-        unyt_array([1.0, 2.0], 1e6 * Msun), "sfh"
-    )
-    assert str(grid.units) == "Msun"
-    np.testing.assert_allclose(grid.value, [1e6, 2e6])
-
-    # Plain arrays are already in Msun
-    np.testing.assert_allclose(
-        pipeline._mass_grid_in_msun(np.array([1.0, 2.0]), "sfh").value,
-        [1.0, 2.0],
-    )
-
-
 def test_parametric_sfzh_and_sfh_out_dtype(
     nebular_emission_model, single_star_parametric, test_grid, tmp_path
 ):
@@ -3789,3 +3855,564 @@ def test_combine_rejects_sparse_rows(tmp_path):
     io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
     with pytest.raises(ValueError, match="rows for 2 galaxies"):
         io.combine_rank_files_virtual()
+
+
+def _read_hdf5_datasets(path):
+    """Return {path: (data, units)} for every dataset in an HDF5 file."""
+    out = {}
+
+    def _visit(name, obj):
+        if isinstance(obj, h5py.Dataset):
+            out[name] = (obj[...], obj.attrs.get("Units"))
+
+    with h5py.File(path, "r") as hdf:
+        hdf.visititems(_visit)
+    return out
+
+
+class TestPipelineFlushing:
+    """Flushing outputs to file while running should not change them."""
+
+    NGAL = 5
+
+    @pytest.fixture
+    def make_galaxies(self, random_particle_galaxy):
+        """Return a function making a fresh list of distinct galaxies."""
+
+        def _make():
+            # Start each run with fresh galaxies so our reference file and
+            # each flushed file see the same inputs in the same order.
+            galaxies = []
+            for i in range(self.NGAL):
+                gal = copy.deepcopy(random_particle_galaxy)
+                gal.stars.initial_masses = gal.stars.initial_masses * (i + 1)
+                galaxies.append(gal)
+            return galaxies
+
+        return _make
+
+    @pytest.fixture
+    def run_pipeline(
+        self,
+        make_galaxies,
+        nebular_emission_model,
+        nircam_instrument_no_psf,
+        kernel,
+        test_grid,
+        tmp_path,
+    ):
+        """Return a function running the pipeline and returning its file."""
+
+        def _run(name, before_write=None, **kwargs):
+            # Exercise a mix of per-galaxy arrays, nested results and a
+            # global cosmic SED: flushes should only empty the former.
+            model = copy.deepcopy(nebular_emission_model)
+            model.set_per_particle(True)
+            outpath = tmp_path / name
+            pipeline = Pipeline(
+                emission_model=model,
+                nthreads=1,
+                verbose=0,
+                outpath=outpath,
+                **kwargs,
+            )
+            pipeline.add_galaxies(make_galaxies())
+            pipeline.get_sfzh(
+                log10ages=test_grid.log10ages,
+                metallicities=test_grid.metallicities,
+            )
+            pipeline.get_sfh(log10ages=test_grid.log10ages)
+            pipeline.get_spectra()
+            pipeline.get_photometry_luminosities(nircam_instrument_no_psf)
+            pipeline.get_lines(line_ids=test_grid.available_lines)
+            pipeline.get_observed_lines(
+                line_ids=test_grid.available_lines,
+                cosmo=cosmo,
+            )
+            pipeline.get_images_luminosity(
+                nircam_instrument_no_psf,
+                fov=100 * Mpc,
+                kernel=kernel,
+            )
+            pipeline.get_cosmic_sed(label="avg", average=True)
+            pipeline.add_analysis_func(
+                lambda gal: {"Mass": gal.stars.initial_masses.sum()},
+                "StellarMass",
+            )
+            pipeline.run()
+            if before_write is not None:
+                before_write(pipeline)
+            pipeline.write()
+            return outpath
+
+        return _run
+
+    def _assert_files_match(self, expected_path, path):
+        # NOTE: only compare the outputs, the EmissionModel metadata stores
+        # children from a set so their order varies between runs
+        outputs = ("Galaxies/", "CosmicSED/", "Lines/")
+        expected = {
+            key: value
+            for key, value in _read_hdf5_datasets(expected_path).items()
+            if key.startswith(outputs)
+        }
+        found = {
+            key: value
+            for key, value in _read_hdf5_datasets(path).items()
+            if key.startswith(outputs)
+        }
+        assert set(found) == set(expected)
+        for key, (data, units) in expected.items():
+            assert found[key][1] == units, key
+            np.testing.assert_array_equal(found[key][0], data, err_msg=key)
+
+    @pytest.mark.parametrize("flush_ngalaxies", [1, 2, 3])
+    def test_flush_ngalaxies_matches_unflushed(
+        self, run_pipeline, flush_ngalaxies
+    ):
+        """Flushing every N galaxies gives the same file as not flushing."""
+        expected = run_pipeline("expected.hdf5")
+        flushed = run_pipeline("flushed.hdf5", flush_ngalaxies=flush_ngalaxies)
+        self._assert_files_match(expected, flushed)
+
+        # Make sure we actually wrote every galaxy
+        with h5py.File(flushed, "r") as hdf:
+            assert hdf["Galaxies/StellarMass/Mass"].shape == (self.NGAL,)
+
+    def test_late_product_matches_unflushed(
+        self, make_galaxies, nebular_emission_model, tmp_path
+    ):
+        """A product first seen after a flush gives the unflushed file."""
+
+        def _run(name, **kwargs):
+            # Count the galaxies processed so far in this run
+            ngal = [0]
+
+            # An analysis function adding a spectra to the fourth galaxy
+            # onwards (the analysis functions run before the outputs are
+            # collected, so this is written like any other spectra)
+            def add_late_spectra(gal):
+                if ngal[0] >= 3:
+                    spectra = gal.stars.spectra
+                    spectra["late"] = next(iter(spectra.values()))
+                ngal[0] += 1
+                return 0.0
+
+            # Run the pipeline and write the file
+            outpath = tmp_path / name
+            pipeline = Pipeline(
+                emission_model=nebular_emission_model,
+                nthreads=1,
+                verbose=0,
+                outpath=outpath,
+                **kwargs,
+            )
+            pipeline.add_galaxies(make_galaxies())
+            pipeline.get_spectra()
+            pipeline.add_analysis_func(add_late_spectra, "Late")
+            pipeline.run()
+            pipeline.write()
+            return outpath
+
+        # Flushing every 2 galaxies means the new spectra first appears in
+        # the second batch, after the first batch is already on disk
+        expected = _run("expected.hdf5")
+        flushed = _run("flushed.hdf5", flush_ngalaxies=2)
+        self._assert_files_match(expected, flushed)
+
+        # The galaxies without the spectra should have zeroed rows
+        with h5py.File(flushed, "r") as hdf:
+            late = hdf[
+                "Galaxies/Stars/Spectra/SpectralLuminosityDensities/late"
+            ]
+            assert late.shape[0] == self.NGAL
+            assert not np.any(late[:3])
+            assert np.all(np.any(late[3:], axis=1))
+
+    @pytest.mark.parametrize(
+        "changed",
+        [
+            {"outer": {"value": 2, "extra": 3}},
+            {"outer": {}},
+            {"outer": 2},
+        ],
+    )
+    def test_analysis_structure_must_match_across_flushes(
+        self, nebular_emission_model, changed
+    ):
+        """Reject changed nested result keys after the first flush."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.io_buffers.analysis_results = {
+            "result": [{"outer": {"value": 1}}]
+        }
+        pipeline.io_buffers.combine_analysis_results()
+        pipeline.io_buffers.analysis_results = {"result": [changed]}
+
+        with pytest.raises(exceptions.BadResult, match="changed structure"):
+            pipeline.io_buffers.combine_analysis_results()
+
+    def test_analysis_structure_must_match_within_flush(
+        self, nebular_emission_model
+    ):
+        """Reject extra nested keys within one batch before merging."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.io_buffers.analysis_results = {
+            "result": [
+                {"outer": {"value": 1}},
+                {"outer": {"value": 2, "extra": 3}},
+            ]
+        }
+        with pytest.raises(exceptions.BadResult, match="changed structure"):
+            pipeline.io_buffers.combine_analysis_results()
+
+    def test_flush_memory_matches_unflushed(self, run_pipeline, monkeypatch):
+        """Flushing on a memory threshold flushes when it's reached."""
+        # Measure the outputs held per galaxy without flushing
+        nbytes = {}
+
+        def _measure(pipeline):
+            nbytes["per_gal"] = (
+                get_buffered_nbytes(
+                    [
+                        getattr(pipeline.io_buffers, attr)
+                        for attr in pipeline.io_buffers.GALAXY_OUTPUTS
+                    ]
+                    + [pipeline.io_buffers.analysis_results]
+                )
+                / self.NGAL
+            )
+
+        expected = run_pipeline("expected.hdf5", before_write=_measure)
+
+        # Count the flushes made while running
+        nflushes = []
+        flush = Pipeline._flush_outputs
+
+        def _counting_flush(pipeline):
+            nflushes.append(pipeline.io_buffers.ngalaxies)
+            assert pipeline.io_buffers.nbytes == get_buffered_nbytes(
+                [
+                    getattr(pipeline.io_buffers, attr)
+                    for attr in pipeline.io_buffers.GALAXY_OUTPUTS
+                ]
+                + [pipeline.io_buffers.analysis_results]
+            )
+            flush(pipeline)
+            assert pipeline.io_buffers.nbytes == 0
+
+        monkeypatch.setattr(Pipeline, "_flush_outputs", _counting_flush)
+
+        # A threshold of 2.5 galaxies worth of outputs should flush after
+        # the third galaxy
+        flushed = run_pipeline(
+            "flushed.hdf5",
+            flush_memory=2.5 * nbytes["per_gal"] / 1024**3,
+        )
+        assert nflushes == [3]
+        self._assert_files_match(expected, flushed)
+
+    def test_flushing_requires_outpath(self, nebular_emission_model):
+        """Flushing without somewhere to flush to is an error."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            Pipeline(emission_model=nebular_emission_model, flush_ngalaxies=1)
+        with pytest.raises(exceptions.InconsistentArguments):
+            Pipeline(emission_model=nebular_emission_model, flush_memory=1.0)
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"flush_ngalaxies": 0},
+            {"flush_ngalaxies": True},
+            {"flush_ngalaxies": 2.0},
+            {"flush_memory": -1.0},
+            {"flush_memory": float("nan")},
+            {"flush_memory": float("inf")},
+        ],
+    )
+    def test_invalid_flush_thresholds(
+        self, nebular_emission_model, tmp_path, kwargs
+    ):
+        """Non-positive or non-integer flush thresholds are rejected."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            Pipeline(
+                emission_model=nebular_emission_model,
+                outpath=tmp_path / "out.hdf5",
+                **kwargs,
+            )
+
+    def test_numpy_integer_flush_ngalaxies(
+        self, nebular_emission_model, tmp_path
+    ):
+        """A numpy integer galaxy threshold is accepted."""
+        pipeline = Pipeline(
+            emission_model=nebular_emission_model,
+            outpath=tmp_path / "out.hdf5",
+            flush_ngalaxies=np.int64(2),
+        )
+        assert pipeline.io_buffers.flush_ngalaxies == 2
+
+    def test_write_to_different_outpath(self, run_pipeline, tmp_path):
+        """Writing somewhere other than the flushed file is an error."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            run_pipeline(
+                "out.hdf5",
+                flush_ngalaxies=2,
+                before_write=lambda p: p.write(tmp_path / "other.hdf5"),
+            )
+
+    def test_change_outpath_without_flushing(self, run_pipeline, tmp_path):
+        """Without flushing, write can change the Pipeline's outpath."""
+        run_pipeline(
+            "out.hdf5",
+            before_write=lambda p: p.write(tmp_path / "other.hdf5"),
+        )
+        assert (tmp_path / "other.hdf5").exists()
+
+    def test_cannot_write_twice_when_flushing(self, run_pipeline):
+        """Flushed outputs can't be written a second time."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            run_pipeline(
+                "out.hdf5",
+                flush_ngalaxies=2,
+                before_write=lambda p: p.write(),
+            )
+
+    def test_cannot_rerun_after_flushing(self, run_pipeline):
+        """Rerunning cannot truncate a previously flushed output file."""
+
+        def check(pipeline):
+            with h5py.File(pipeline.io_helper.outpath) as hdf:
+                expected = hdf["Galaxies/Stars/SFH"][...]
+            with pytest.raises(exceptions.InconsistentArguments):
+                pipeline.run()
+            with h5py.File(pipeline.io_helper.outpath) as hdf:
+                np.testing.assert_array_equal(
+                    hdf["Galaxies/Stars/SFH"][...], expected
+                )
+
+        run_pipeline("out.hdf5", flush_ngalaxies=1, before_write=check)
+
+    def test_retry_after_failed_write_without_flushing(
+        self, run_pipeline, tmp_path
+    ):
+        """A failed write doesn't stop us writing somewhere else."""
+
+        def fail_then_move(pipeline):
+            with pytest.raises(OSError):
+                pipeline.write(tmp_path / "missing" / "out.hdf5")
+            pipeline.write(tmp_path / "other.hdf5")
+
+        run_pipeline("out.hdf5", before_write=fail_then_move)
+        assert (tmp_path / "other.hdf5").exists()
+
+    def test_retry_failed_write_when_flushing(self, run_pipeline):
+        """Retrying a failed final write doesn't duplicate any rows."""
+
+        def fail_once(pipeline):
+            # Fail after the global outputs have been written so the retry
+            # has to cope with both those and the galaxy rows existing
+            write_global = pipeline.io_helper.write_global_outputs
+
+            def fail(requested):
+                write_global(requested)
+                raise OSError("Disk full")
+
+            pipeline.io_helper.write_global_outputs = fail
+            with pytest.raises(OSError):
+                pipeline.write()
+            pipeline.io_helper.write_global_outputs = write_global
+
+        expected = run_pipeline("expected.hdf5")
+        retried = run_pipeline(
+            "retried.hdf5", flush_ngalaxies=2, before_write=fail_once
+        )
+        self._assert_files_match(expected, retried)
+
+    def test_refused_write_keeps_flushed_path(self, run_pipeline, tmp_path):
+        """Refusing a second write leaves the writer on the flushed file."""
+        filepaths = []
+
+        def write_twice(pipeline):
+            pipeline.write()
+            with pytest.raises(exceptions.InconsistentArguments):
+                pipeline.write(tmp_path / "other.hdf5")
+            filepaths.append(pipeline.io_helper.filepath)
+
+        # The fixture's own write is refused too
+        with pytest.raises(exceptions.InconsistentArguments):
+            run_pipeline(
+                "out.hdf5", flush_ngalaxies=2, before_write=write_twice
+            )
+        assert filepaths == [str(tmp_path / "out.hdf5")]
+
+
+def test_empty_placeholder_replaced_by_nonempty_batch(tmp_path):
+    """An empty dataset with unknown trailing shape can be replaced."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Set up a writer as the Pipeline would have it
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "placeholder.hdf5")
+    io.rows_written = 0
+
+    # An earlier empty batch left a placeholder without the trailing shape
+    with h5py.File(io.filepath, "w") as hdf:
+        hdf.create_dataset("Galaxies/Product", shape=(0,))
+
+    # Writing real rows should replace it rather than fail on the shape
+    io.write_dataset(np.ones((2, 3)), "Galaxies/Product")
+    with h5py.File(io.filepath) as hdf:
+        assert hdf["Galaxies/Product"].shape == (2, 3)
+
+
+def test_sparse_product_rows_follow_galaxy_order():
+    """A product first seen on a later galaxy keeps its original row."""
+    from synthesizer.pipeline.pipeline_io import PipelineIOBuffers
+
+    buffers = PipelineIOBuffers()
+
+    # Hold three galaxies where only the second produces the spectra
+    for lnu in (None, np.array([2.0]), None):
+        if lnu is not None:
+            buffers.append_output(lnu, "lnu_spectra", "Galaxy", "nebular")
+        buffers.end_galaxy()
+
+    # The spectra should sit in the second row, with the others zero padded
+    np.testing.assert_array_equal(
+        buffers.lnu_spectra["Galaxy"]["nebular"], [[0.0], [2.0], [0.0]]
+    )
+    assert buffers.ngalaxies == 3
+
+    # After a flush empties the buffers, a galaxy without the spectra still
+    # gets a padded row since we now know the product exists
+    buffers.clear()
+    buffers.end_galaxy()
+    np.testing.assert_array_equal(
+        buffers.lnu_spectra["Galaxy"]["nebular"], [[0.0]]
+    )
+
+
+def test_black_hole_fnu_spectra_written_beneath_spectra():
+    """Black hole flux densities are written with the other spectra."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO, PipelineIOBuffers
+
+    # Hold a galaxy with black hole flux densities
+    buffers = PipelineIOBuffers()
+    buffers.append_output(np.ones(2), "fnu_spectra", "BlackHole", "agn")
+    buffers.end_galaxy()
+
+    # Set up a serial writer which records where each output is written
+    # rather than writing a file
+    paths = []
+    io = PipelineIO(buffers)
+    io.write_data = lambda data, path: paths.append(path)
+    io.write_galaxy_outputs({"fnu_spectra"})
+
+    assert "Galaxies/BlackHoles/Spectra/SpectralFluxDensities" in paths
+    assert not any("Photometry" in path for path in paths)
+
+
+def test_spectroscopy_unpacked_from_matching_frame():
+    """Each spectroscopy output is taken from its own frame's store."""
+    from types import SimpleNamespace
+
+    from synthesizer.pipeline.pipeline_io import PipelineIOBuffers
+
+    # A galaxy holding different spectroscopy in each frame
+    galaxy = SimpleNamespace(
+        stars=None,
+        black_holes=None,
+        spectroscopy_lnu={
+            "spec": {"total": SimpleNamespace(lnu=np.array([1.0]))}
+        },
+        spectroscopy_fnu={
+            "spec": {"total": SimpleNamespace(fnu=np.array([2.0]))}
+        },
+    )
+
+    # Unpack both outputs
+    buffers = PipelineIOBuffers()
+    buffers.unpack(galaxy, {"spectroscopy_lnu", "spectroscopy_fnu"})
+
+    # Each output holds its own frame's spectrum
+    np.testing.assert_array_equal(
+        buffers.spectroscopy_lnu["Galaxy"]["spec"]["total"], [[1.0]]
+    )
+    np.testing.assert_array_equal(
+        buffers.spectroscopy_fnu["Galaxy"]["spec"]["total"], [[2.0]]
+    )
+
+
+def test_late_product_backfills_flushed_rows(tmp_path):
+    """A product first written after a flush includes earlier galaxy rows."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Set up a serial writer which has already flushed two galaxies
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "late.hdf5")
+    io.is_parallel = io.is_collective = False
+    io.verbose, io._start_time = 0, time.perf_counter()
+    io.rows_written = 2
+
+    # Write a product for the third galaxy only, which should be preceded
+    # by empty rows for the flushed galaxies
+    io.write_data(np.array([[3.0]]), "Galaxies/Product")
+    with h5py.File(io.filepath) as hdf:
+        np.testing.assert_array_equal(hdf["Galaxies/Product"], [[0], [0], [3]])
+
+
+def test_flushed_strings_can_grow(tmp_path):
+    """Later flushes may hold longer strings than earlier ones."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Set up a serial writer as the Pipeline would have it
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "strings.hdf5")
+    io.is_parallel = io.is_collective = False
+    io.verbose, io._start_time = 0, time.perf_counter()
+    io.rows_written = 0
+
+    # Write a first batch, then a second with a longer string
+    io.write_data(np.array(["ab", "cd"]), "Galaxies/Name")
+    io.rows_written = 2
+    io.write_data(np.array(["abcde"]), "Galaxies/Name")
+
+    # Every string should be stored in full
+    with h5py.File(io.filepath) as hdf:
+        assert list(hdf["Galaxies/Name"].asstr()) == ["ab", "cd", "abcde"]
+
+
+def test_buffer_outputs_cover_every_container():
+    """Every output container is counted towards the results memory."""
+    import dataclasses
+
+    from synthesizer.pipeline.pipeline_io import PipelineIOBuffers
+
+    # Everything held on the buffers other than the flushing state and
+    # the cosmic SED counts should be an output
+    bookkeeping = {
+        "flush_ngalaxies",
+        "flush_memory",
+        "ngalaxies",
+        "nbytes",
+        "cosmic_lnu_counts",
+        "cosmic_fnu_counts",
+    }
+    containers = {
+        f.name
+        for f in dataclasses.fields(PipelineIOBuffers)
+        if not f.name.startswith("_") and f.name not in bookkeeping
+    }
+    assert set(PipelineIOBuffers.OUTPUT_NAMES) == containers
+
+    # Every per-galaxy output should say where it's unpacked from (other
+    # than the observed line wavelengths, which unpack handles itself)
+    assert set(PipelineIOBuffers.GALAXY_SOURCES) == (
+        set(PipelineIOBuffers.GALAXY_OUTPUTS) - {"line_obs_lams"}
+    )
+
+    # The property should return the current containers, even once
+    # they've been replaced
+    buffers = PipelineIOBuffers()
+    buffers.line_ids = ["H 1 4861.32A"]
+    assert buffers.line_ids in buffers.outputs
