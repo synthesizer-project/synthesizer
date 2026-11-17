@@ -8,6 +8,7 @@ resolution, optional PSFs, and noise definitions.
 import h5py
 import numpy as np
 from scipy import signal
+from scipy.interpolate import interp1d
 from unyt import angstrom, arcsecond, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
@@ -21,6 +22,7 @@ from synthesizer.instruments.utils import (
     read_instrument_attribute,
     write_instrument_attribute,
 )
+from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts, unyt_to_ndview
 from synthesizer.utils.operation_timers import timed
 
@@ -39,6 +41,9 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             a function of wavelength, in dimensionless units. If a 2D array is
             supplied, every wavelength is assumed to have the same PSF. If
             a 3D array is supplied, the last axis must be the wavelength axis.
+        psf_lam (unyt_array): Input wavelength grid of the PSF slices.
+            Wavelength-dependent PSFs are interpolated onto ``lam`` during
+            initialisation. Defaults to ``lam`` when not explicitly supplied.
         lsfs (array, optional): Normalised line spread function kernels
             with shape (nwave, nkernel), inherited from
             SpectroscopicInstrument. Each row corresponds to a
@@ -48,6 +53,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
     @accepts(
         resolution=(kpc, arcsecond),
         psf_pixel_scale=(kpc, arcsecond),
+        psf_lam=angstrom,
         lam=angstrom,
         depth_app_radius=(kpc, arcsecond),
     )
@@ -66,6 +72,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         noise_source_maps=None,
         resolving_power=None,
         lsfs=None,
+        psf_lam=None,
     ):
         """Initialise an integrated field unit instrument.
 
@@ -83,6 +90,10 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             psf_pixel_scale (unyt_quantity, optional): Spatial pixel scale of
                 the supplied PSF kernels. Must have units compatible with the
                 spectral cube resolution.
+            psf_lam (unyt_array, optional): Input wavelength grid of the
+                supplied PSF slices. Wavelength-dependent PSFs are
+                interpolated onto ``lam`` during initialisation. Defaults to
+                ``lam``.
             depth (unyt_quantity, optional): The depth of the instrument, in
                 the same units as the image surface brightness.
             depth_app_radius (unyt_quantity, optional): The aperture radius for
@@ -121,10 +132,75 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         self.resolution = resolution
         self.psfs = psfs
         self.psf_pixel_scale = psf_pixel_scale
+        self.psf_lam = self.lam if psf_lam is None else psf_lam
         self.noise_source_maps = noise_source_maps
 
         # Ensure we have been handed the correct information
         self._validate()
+        self._interpolate_psfs_to_lam()
+
+    @timed("IntegratedFieldUnit._interpolate_psfs_to_lam")
+    def _interpolate_psfs_to_lam(self):
+        """Interpolate wavelength-dependent PSFs onto ``self.lam`` once."""
+        if self.psfs is None or np.ndim(self.psfs) != 3:
+            return
+
+        if self.psf_lam is None:
+            if self.psfs.shape[2] == len(self.lam):
+                warn(
+                    "PSF wavelengths not provided. Assuming PSF wavelengths "
+                    "match the instrument wavelength grid."
+                )
+                self.psf_lam = self.lam.copy()
+                return
+            else:
+                raise ValueError(
+                    "PSF wavelengths are required when the number of PSF "
+                    "slices differs from the instrument wavelength grid."
+                )
+
+        source_lam = unyt_to_ndview(self.psf_lam, self.lam.units)
+        target_lam = self.lam.ndview
+
+        if len(source_lam) != self.psfs.shape[2]:
+            raise ValueError(
+                "PSF wavelength array must match the PSF cube wavelength axis."
+            )
+
+        if len(source_lam) == 0 or np.any(np.diff(source_lam) <= 0):
+            raise ValueError("PSF wavelengths must be strictly increasing.")
+
+        # No interpolation if already on the correct wavelength grid
+        if np.array_equal(source_lam, target_lam):
+            return
+
+        if len(source_lam) == 1:
+            warn(
+                "Only one PSF wavelength provided. Repeating the PSF "
+                "across the instrument wavelength grid."
+            )
+            interpolated_psfs = np.repeat(self.psfs, len(target_lam), axis=2)
+        else:
+            # Warn if target wavelengths extend beyond the PSF coverage
+            if np.any(
+                (target_lam < source_lam[0]) | (target_lam > source_lam[-1])
+            ):
+                warn(
+                    "Instrument wavelengths extend beyond the PSF wavelength "
+                    "range. Endpoint PSFs will be used outside this range."
+                )
+
+            interpolated_psfs = interp1d(
+                source_lam,
+                self.psfs,
+                axis=2,
+                kind="linear",
+                bounds_error=False,
+                fill_value=(self.psfs[:, :, 0], self.psfs[:, :, -1]),
+            )(target_lam)
+
+        self.psfs = interpolated_psfs
+        self.psf_lam = self.lam.copy()
 
     @timed("IntegratedFieldUnit._validate")
     def _validate(self):
@@ -147,6 +223,34 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             raise exceptions.MissingArgument(
                 "A PSF pixel scale must be provided when PSFs are set."
             )
+
+        if not isinstance(self.psf_lam, unyt_array) or self.psf_lam.ndim != 1:
+            raise exceptions.InconsistentArguments(
+                "psf_lam must be a one-dimensional wavelength array."
+            )
+
+        if len(self.psf_lam) == 0:
+            raise exceptions.InconsistentArguments(
+                "psf_lam must contain at least one wavelength."
+            )
+
+        psf_lam = unyt_to_ndview(self.psf_lam, angstrom)
+        if not np.all(np.isfinite(psf_lam)) or np.any(psf_lam <= 0):
+            raise exceptions.InconsistentArguments(
+                "psf_lam must contain only positive, finite wavelengths."
+            )
+
+        if len(psf_lam) > 1 and not np.all(np.diff(psf_lam) > 0):
+            raise exceptions.InconsistentArguments(
+                "psf_lam must be strictly increasing."
+            )
+
+        if self.psfs is not None and np.ndim(self.psfs) == 3:
+            if self.psfs.shape[2] != len(self.psf_lam):
+                raise exceptions.InconsistentArguments(
+                    "The number of psf_lam wavelengths must match the "
+                    "number of PSF slices."
+                )
 
         if self.psf_pixel_scale is not None:
             if not np.all(np.isfinite(self.psf_pixel_scale.value)):
@@ -207,6 +311,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             _hashable_state(self.resolution),
             _hashable_state(self.psfs),
             _hashable_state(self.psf_pixel_scale),
+            _hashable_state(self.psf_lam),
             _hashable_state(self.noise_source_maps),
         )
 
@@ -403,6 +508,9 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
     def apply_psf_to_cube(self, cube, inplace=False):
         """Apply the IFU PSF to a spectral cube.
 
+        Wavelength-dependent PSFs are interpolated onto the instrument
+        wavelength grid during initialisation.
+
         Args:
             cube (SpectralCube): Spectral cube to which the PSF should be
                 applied.
@@ -415,7 +523,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         Raises:
             MissingArgument: If the instrument has no PSFs configured.
             InconsistentArguments: If the PSF dimensions or wavelength
-                grid are incompatible with the cube.
+                grid are incompatible with the instrument.
         """
         # Ensure the spectral cube has been generated.
         if cube.arr is None:
@@ -452,24 +560,19 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             )
 
         if psf_type == "3D":
-            cube_lam = cube.lam.ndview
-            min_channel_spacing = (
-                np.min(np.abs(np.diff(cube_lam))) if len(cube_lam) > 1 else 0.0
-            )
-            if len(self.lam) != len(cube.lam) or not np.allclose(
-                unyt_to_ndview(self.lam, cube.lam.units),
-                cube_lam,
-                rtol=0.0,
-                atol=min_channel_spacing * 1e-6,
-            ):
+            if self.psfs.shape[2] != len(self.psf_lam):
                 raise exceptions.InconsistentArguments(
-                    "The Instrument and cube wavelength grids must match."
+                    "The number of PSF wavelength planes must match `psf_lam`."
                 )
-            if np.shape(self.psfs)[2] != np.shape(cube.arr)[2]:
+
+            # Wavelength-dependent PSFs are interpolated onto the instrument
+            # grid during initialisation, so indexing them by cube channel is
+            # only valid when the cube uses that same wavelength grid.
+            cube_lam = unyt_to_ndview(cube.lam, self.psf_lam.units)
+            if not np.array_equal(cube_lam, self.psf_lam.ndview):
                 raise exceptions.InconsistentArguments(
-                    "The Instrument PSF is specified on a different wavelength"
-                    "grid to the data cube. The PSF must be specified at each"
-                    "wavelength."
+                    "The cube wavelength grid must match the PSF wavelength "
+                    "grid for a wavelength-dependent PSF."
                 )
 
         psf_resample_factor = unyt_to_ndview(
@@ -628,6 +731,11 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             ds = group.create_dataset("PSFs", data=self.psfs, dtype=float)
             ds.attrs["units"] = "dimensionless"
 
+        ds = group.create_dataset(
+            "PSFWavelength", data=self.psf_lam.value, dtype=float
+        )
+        ds.attrs["units"] = str(self.psf_lam.units)
+
         if self.psf_pixel_scale is not None:
             ds = group.create_dataset(
                 "PSFPixelScale",
@@ -685,6 +793,14 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         else:
             psfs = None
 
+        if "PSFWavelength" in group:
+            psf_lam = unyt_array(
+                group["PSFWavelength"][...],
+                group["PSFWavelength"].attrs["units"],
+            )
+        else:
+            psf_lam = lam
+
         if "PSFPixelScale" in group:
             psf_pixel_scale = unyt_quantity(
                 group["PSFPixelScale"][()],
@@ -710,6 +826,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             "snrs": snrs,
             "psfs": psfs,
             "psf_pixel_scale": psf_pixel_scale,
+            "psf_lam": psf_lam,
             "lsfs": lsfs,
             "noise_maps": noise_maps,
             "noise_source_maps": noise_source_maps,
@@ -726,6 +843,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             snrs=payload["snrs"],
             psfs=payload["psfs"],
             psf_pixel_scale=payload["psf_pixel_scale"],
+            psf_lam=payload["psf_lam"],
             lsfs=payload["lsfs"],
             noise_maps=payload["noise_maps"],
             noise_source_maps=payload["noise_source_maps"],

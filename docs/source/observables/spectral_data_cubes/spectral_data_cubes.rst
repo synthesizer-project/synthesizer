@@ -26,9 +26,9 @@ quantities (e.g. ``"lnu"``) they are rest frame wavelengths.
 
 Spectral cubes can be spatially convolved with a PSF through an
 ``IntegratedFieldUnit``. Both wavelength-independent 2D kernels and
-wavelength-dependent 3D kernels are supported, with optional temporary spatial
-supersampling during convolution. See the :doc:`PSF-convolution section of the
-particle spectral-cube example <particle_data_cube>` for how to use this.
+wavelength-dependent 3D kernels are supported; 3D kernels may use a separate
+wavelength grid. See the :doc:`PSF-convolution section of the particle
+spectral-cube example <particle_data_cube>` for how to use this.
 
 The documentation below starts with the high-level particle and parametric
 galaxy workflows, then shows how the returned cube can be analysed or how a
