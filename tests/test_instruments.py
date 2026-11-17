@@ -1156,10 +1156,10 @@ class TestIntegratedFieldUnitPsfApplication:
         with pytest.raises(exceptions.InconsistentArguments):
             instrument.apply_psf_to_cube(spectral_cube_with_central_source)
 
-    def test_apply_psf_to_cube_uses_nearest_psf_wavelength_plane(
+    def test_apply_psf_to_cube_interpolates_psf_wavelength_planes(
         self, spectral_cube_with_central_source
     ):
-        """A 3D PSF should select the nearest plane on a distinct grid."""
+        """A 3D PSF should interpolate planes from a distinct grid."""
         psfs = np.zeros((3, 3, 2), dtype=float)
         psfs[1, 1, 0] = 1.0
         psfs[1, 0, 1] = 1.0
@@ -1172,13 +1172,14 @@ class TestIntegratedFieldUnitPsfApplication:
             spectral_cube_with_central_source
         )
 
-        peak_locations = [
-            np.unravel_index(
-                np.argmax(result.arr[:, :, index]), result.arr.shape[:2]
-            )
-            for index in range(result.arr.shape[2])
-        ]
-        assert peak_locations == [(4, 4), (4, 3), (4, 3)]
+        np.testing.assert_allclose(
+            result.arr[4, 4, :],
+            [11 / 12, 1 / 12, 0],
+        )
+        np.testing.assert_allclose(
+            result.arr[4, 3, :],
+            [1 / 12, 11 / 12, 1],
+        )
 
     def test_psf_plane_count_must_match_psf_lam(self):
         """A 3D PSF must have one plane per PSF wavelength."""
@@ -1213,8 +1214,8 @@ class TestIntegratedFieldUnitPsfApplication:
         with pytest.raises(exceptions.InconsistentArguments):
             self._instrument(psfs, psf_lam=psf_lam)
 
-    def test_psf_lam_is_included_in_instrument_comparisons(self):
-        """Different PSF wavelength grids should make IFUs unequal."""
+    def test_psf_lam_is_normalized_to_the_instrument_grid(self):
+        """IFUs compare using their PSFs resampled to the instrument grid."""
         psfs = np.zeros((3, 3, 3), dtype=float)
         psfs[1, 1, :] = 1.0
         psf_lam = np.array([1000.0, 2000.0, 3000.0]) * angstrom
@@ -1225,7 +1226,9 @@ class TestIntegratedFieldUnitPsfApplication:
         )
 
         assert instrument == identical
-        assert instrument != different
+        assert instrument == different
+        np.testing.assert_allclose(instrument.psf_lam, instrument.lam)
+        np.testing.assert_allclose(different.psf_lam, different.lam)
 
     def test_apply_psf_to_cube_with_resampling_does_not_mutate_input(
         self, spectral_cube_with_central_source
@@ -1339,7 +1342,8 @@ class TestIntegratedFieldUnitPsfApplication:
             psf_pixel_scale=psf_pixel_scale,
             psf_lam=psf_lam,
         )
-        expected_psf_lam = instrument.lam if psf_lam is None else psf_lam
+        expected_psf_lam = instrument.psf_lam
+        expected_psfs = instrument.psfs
         filepath = tmp_path / "ifu.hdf5"
 
         with h5py.File(filepath, "w") as hdf:
@@ -1365,7 +1369,7 @@ class TestIntegratedFieldUnitPsfApplication:
             np.testing.assert_allclose(
                 restored.psf_pixel_scale.value, psf_pixel_scale.value
             )
-            np.testing.assert_allclose(restored.psfs, psfs)
+            np.testing.assert_allclose(restored.psfs, expected_psfs)
 
     def test_hdf5_load_without_psf_wavelength_defaults_to_lam(self, tmp_path):
         """Legacy IFU files should use the instrument grid for PSF planes."""
