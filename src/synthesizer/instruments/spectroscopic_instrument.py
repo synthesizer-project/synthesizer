@@ -20,7 +20,6 @@ from synthesizer.instruments.utils import (
     read_instrument_attribute,
     write_instrument_attribute,
 )
-
 from synthesizer.synth_warnings import deprecated
 from synthesizer.units import Quantity, accepts, deepcopy_with_shared_units
 from synthesizer.utils.operation_timers import timed
@@ -171,6 +170,12 @@ class SpectroscopicInstrument(InstrumentBase):
                         "resolving_power must be a one-dimensional array."
                     )
 
+                if np.ndim(self.resolving_power_lam) != 1:
+                    raise exceptions.InconsistentArguments(
+                        "resolving_power_lam must be a one-dimensional "
+                        "wavelength array."
+                    )
+
                 if len(self.resolving_power) != len(self.resolving_power_lam):
                     raise exceptions.InconsistentArguments(
                         "resolving_power and resolving_power_lam must have "
@@ -257,6 +262,15 @@ class SpectroscopicInstrument(InstrumentBase):
         Returns:
             tuple: Hashable representation of the instrument state.
         """
+        # Keep every resolving-power grid coordinate. The generic numeric
+        # state helper intentionally uses a compact fingerprint, which can
+        # make grids with different interior wavelengths compare equal.
+        resolving_power_lam_state = (
+            None
+            if self.resolving_power_lam is None
+            else tuple(self.resolving_power_lam.to_value("angstrom"))
+        )
+
         return (
             _hashable_state(self._lam),
             _hashable_state(self.depth),
@@ -264,7 +278,7 @@ class SpectroscopicInstrument(InstrumentBase):
             _hashable_state(self.snrs),
             _hashable_state(self.noise_maps),
             _hashable_state(self.resolving_power),
-            _hashable_state(self.resolving_power_lam),
+            resolving_power_lam_state,
             _hashable_state(self.lsfs),
         )
 

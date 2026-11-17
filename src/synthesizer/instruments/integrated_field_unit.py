@@ -559,10 +559,21 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                 "The Instrument PSF must contain only finite values."
             )
 
-        if psf_type == "3D" and self.psfs.shape[2] != len(self.psf_lam):
-            raise exceptions.InconsistentArguments(
-                "The number of PSF wavelength planes must match `psf_lam`."
-            )
+        if psf_type == "3D":
+            if self.psfs.shape[2] != len(self.psf_lam):
+                raise exceptions.InconsistentArguments(
+                    "The number of PSF wavelength planes must match `psf_lam`."
+                )
+
+            # Wavelength-dependent PSFs are interpolated onto the instrument
+            # grid during initialisation, so indexing them by cube channel is
+            # only valid when the cube uses that same wavelength grid.
+            cube_lam = unyt_to_ndview(cube.lam, self.psf_lam.units)
+            if not np.array_equal(cube_lam, self.psf_lam.ndview):
+                raise exceptions.InconsistentArguments(
+                    "The cube wavelength grid must match the PSF wavelength "
+                    "grid for a wavelength-dependent PSF."
+                )
 
         psf_resample_factor = unyt_to_ndview(
             cube.resolution / self.psf_pixel_scale,
