@@ -25,7 +25,7 @@ from synthesizer.conversions import (
 )
 from synthesizer.imaging.extensions.image import make_img
 from synthesizer.synth_warnings import warn
-from synthesizer.units import unit_is_compatible
+from synthesizer.units import convert_in_place, unit_is_compatible
 from synthesizer.utils.operation_timers import timed, timer
 
 _CENTERING_TOLERANCE = 1e-6
@@ -386,7 +386,7 @@ def _generate_image_particle_hist(
 
         # Convert coordinates and smoothing lengths to the correct units and
         # strip them off
-        coordinates = coordinates.to_value(spatial_units)
+        coordinates = convert_in_place(coordinates, spatial_units).ndview
 
     with timer("_generate_image_particle_hist.generate"):
         # Include normalisation in the original signal if we have one
@@ -579,10 +579,12 @@ def _generate_image_particle_smoothed(
 
         # Shift the centred coordinates by half the FOV
         # (this is to ensure the image is centered on the emitter)
-        _coords = cent_coords.to(spatial_units).value
+        _coords = cent_coords.to(spatial_units).ndview
         _coords[:, 0] += fov[0] / 2.0
         _coords[:, 1] += fov[1] / 2.0
-        _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
+        _smoothing_lengths = convert_in_place(
+            smoothing_lengths, spatial_units
+        ).ndview
 
         # Apply normalisation to original signal if needed
         if normalisation is not None:
@@ -752,10 +754,12 @@ def _generate_images_particle_smoothed(
 
         # Shift the centred coordinates by half the FOV
         # (this is to ensure the image is centered on the emitter)
-        _coords = cent_coords.to(spatial_units).value
+        _coords = cent_coords.to(spatial_units).ndview
         _coords[:, 0] += fov[0] / 2.0
         _coords[:, 1] += fov[1] / 2.0
-        _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
+        _smoothing_lengths = convert_in_place(
+            smoothing_lengths, spatial_units
+        ).ndview
 
         # Apply normalisation to original signal if needed
         if normalisations is not None:

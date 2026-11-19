@@ -496,8 +496,13 @@ void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
  * grid point inds[j] for j in [offsets[i], offsets[i + 1]).
  */
 struct BicAxisTable {
+  /* The start of each bin's run in inds and fracs (nbins + 1 entries). */
   std::vector<int> offsets;
+
+  /* The grid point indices each bin contributes to, bin after bin. */
   std::vector<int> inds;
+
+  /* The fraction of the bin's mass given to each entry in inds. */
   std::vector<double> fracs;
 };
 
@@ -508,6 +513,12 @@ struct BicAxisTable {
  * fractions along each axis are computed once and reused for every
  * population and every bin sharing that edge pair.
  *
+ * The mask is applied here too. Each bin is clipped to the mask's range
+ * along the axis, its fractions are computed over the clipped extent and
+ * then scaled by the fraction of the bin inside the range. Mass is uniform
+ * within a bin, so this is exact, and it costs nothing per bin when the
+ * populations are spread.
+ *
  * @tparam PopReal The floating-point type of the population arrays.
  * @tparam GridReal The floating-point type of the grid axis arrays.
  * @param grid_props: A struct containing the properties along each grid axis.
@@ -517,22 +528,63 @@ struct BicAxisTable {
 template <typename PopReal, typename GridReal>
 static void build_bic_tables(GridProps *grid_props, Populations *pops,
                              std::array<BicAxisTable, MAX_GRID_NDIM> &tables) {
+  /* Scratch buffers for a single bin, reused for every bin. */
   std::vector<int> inds;
   std::vector<double> fracs;
+
   for (int dim = 0; dim < pops->ndim; dim++) {
+    /* Get this axis' grid points and bin edges. */
     const GridReal *grid_axis = grid_props->get_axis<GridReal>(dim);
     const PopReal *edges = pops->get_edges<PopReal>(dim);
+
+    /* Reset the table, starting the offsets with the first bin's start. */
     BicAxisTable &table = tables[dim];
     table.offsets.assign(1, 0);
     table.inds.clear();
     table.fracs.clear();
+
+    /* Get the mask's range along this axis. */
+    const double mask_lo = pops->get_mask_lo(dim);
+    const double mask_hi = pops->get_mask_hi(dim);
+
+    /* Compute each bin's grid points and fractions and append them. */
     for (int ibin = 0; ibin < pops->nbins[dim]; ibin++) {
-      get_pop_bin_fracs_bic<GridReal>(
-          grid_axis, grid_props->dims[dim], pops->log_axis[dim],
-          static_cast<double>(edges[ibin]),
-          static_cast<double>(edges[ibin + 1]), inds, fracs);
-      table.inds.insert(table.inds.end(), inds.begin(), inds.end());
-      table.fracs.insert(table.fracs.end(), fracs.begin(), fracs.end());
+      double lo = static_cast<double>(edges[ibin]);
+      double hi = static_cast<double>(edges[ibin + 1]);
+
+      /* Apply the mask (in the edges' own units). A point passes or fails
+       * entirely, while a finite bin is clipped to the range and keeps the
+       * fraction inside it. */
+      double scale = 1.0;
+      if (hi <= lo) {
+        if (lo < mask_lo || lo > mask_hi) {
+          scale = 0.0;
+        }
+      } else {
+        const double clip_lo = std::max(lo, mask_lo);
+        const double clip_hi = std::min(hi, mask_hi);
+        if (clip_hi <= clip_lo) {
+          scale = 0.0;
+        } else {
+          scale = (clip_hi - clip_lo) / (hi - lo);
+          lo = clip_lo;
+          hi = clip_hi;
+        }
+      }
+
+      /* A bin entirely outside the mask contributes nothing, so it gets an
+       * empty run. Otherwise append its (scaled) grid points and fractions.
+       */
+      if (scale > 0.0) {
+        get_pop_bin_fracs_bic<GridReal>(
+            grid_axis, grid_props->dims[dim], pops->is_log_axis(dim),
+            lo * pops->get_unit_scale(dim), hi * pops->get_unit_scale(dim),
+            inds, fracs);
+        table.inds.insert(table.inds.end(), inds.begin(), inds.end());
+        for (const double frac : fracs) {
+          table.fracs.push_back(frac * scale);
+        }
+      }
       table.offsets.push_back(static_cast<int>(table.inds.size()));
     }
   }
@@ -564,6 +616,8 @@ static inline void spread_bin_bic(
     const BicAxisTable &table = tables[dim];
     starts[dim] = table.offsets[bin_inds[dim]];
     lens[dim] = table.offsets[bin_inds[dim] + 1] - starts[dim];
+
+    /* An axis with no contributions means the bin puts nothing anywhere. */
     if (lens[dim] == 0) {
       return;
     }
@@ -572,6 +626,7 @@ static inline void spread_bin_bic(
 
   /* Step through every combination of grid points like an odometer. */
   while (true) {
+    /* Multiply the per axis fractions and build the flat grid index. */
     double frac = mass;
     int flat_ind = 0;
     for (int dim = 0; dim < ndim; dim++) {
@@ -579,6 +634,8 @@ static inline void spread_bin_bic(
       frac *= tables[dim].fracs[j];
       flat_ind = flat_ind * grid_dims[dim] + tables[dim].inds[j];
     }
+
+    /* Add this combination's share of the mass. */
     out[flat_ind] += frac;
 
     /* Advance the odometer, finishing once every axis has wrapped. */
@@ -594,36 +651,40 @@ static inline void spread_bin_bic(
 }
 
 /**
- * @brief Spread one population's masses onto the grid using a bin in cell
- *        (BIC) approach.
+ * @brief This calculates the grid weights of every population summed
+ *        together using a bin in cell (BIC) approach.
+ *
+ * This is the serial version of the function.
  *
  * @tparam PopReal The floating-point type of the population arrays.
  * @param tables: The per axis BIC tables.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param pops: A struct containing the population properties.
- * @param ipop: The population index.
- * @param start: The first bin (within the population) to spread.
- * @param end: One past the last bin (within the population) to spread.
- * @param out: The double precision grid sized output to accumulate into.
+ * @param out: The double precision accumulation buffer (grid sized).
  */
 template <typename PopReal>
-static void spread_population_bic(
+static void weight_loop_bic_serial(
     const std::array<BicAxisTable, MAX_GRID_NDIM> &tables,
-    GridProps *grid_props, Populations *pops, const int ipop, const int start,
-    const int end, double *out) {
+    GridProps *grid_props, Populations *pops, double *out) {
+
+  /* Get the masses and somewhere to store each bin's N dimensional index. */
   const PopReal *masses = pops->get_masses<PopReal>();
   std::array<int, MAX_GRID_NDIM> bin_inds;
-  for (int icell = start; icell < end; icell++) {
-    const size_t ind =
-        static_cast<size_t>(ipop) * pops->ncells + static_cast<size_t>(icell);
-    if (pops->bin_is_masked(ind)) {
-      continue;
-    }
+
+  /* Loop over every bin of every population (flat index). */
+  const size_t nbins_total =
+      static_cast<size_t>(pops->npop) * static_cast<size_t>(pops->ncells);
+  for (size_t ind = 0; ind < nbins_total; ind++) {
+
+    /* Skip empty bins (masked out bins have empty table runs). */
     const double mass = static_cast<double>(masses[ind]);
     if (mass == 0.0) {
       continue;
     }
-    get_indices_from_flat(icell, pops->ndim, pops->nbins, bin_inds);
+
+    /* Get the bin's index along each grid axis and spread its mass onto
+     * the grid. */
+    pops->get_bin_inds(static_cast<int>(ind % pops->ncells), bin_inds);
     spread_bin_bic(tables, pops->ndim, grid_props->dims, bin_inds, mass, out);
   }
 }
@@ -632,9 +693,80 @@ static void spread_population_bic(
  * @brief This calculates the grid weights of every population summed
  *        together using a bin in cell (BIC) approach.
  *
- * Accumulation happens in double precision and is folded into the output
- * buffer once at the end. With OpenMP the bins of all populations are split
- * between threads, each accumulating into a private buffer.
+ * This is the parallel version of the function.
+ *
+ * The bins of all populations are split between threads, each accumulating
+ * into a private local buffer which is added into the output array at the
+ * end of the thread's execution.
+ *
+ * @tparam PopReal The floating-point type of the population arrays.
+ * @param tables: The per axis BIC tables.
+ * @param grid_props: A struct containing the properties along each grid axis.
+ * @param pops: A struct containing the population properties.
+ * @param out_size: The size of the output array.
+ * @param out: The double precision accumulation buffer (grid sized).
+ * @param nthreads: The number of threads to use.
+ */
+#ifdef WITH_OPENMP
+template <typename PopReal>
+static void weight_loop_bic_omp(
+    const std::array<BicAxisTable, MAX_GRID_NDIM> &tables,
+    GridProps *grid_props, Populations *pops, int out_size, double *out,
+    int nthreads) {
+
+  /* Get the masses and the number of bins across all populations. */
+  const PopReal *masses = pops->get_masses<PopReal>();
+  const size_t nbins_total =
+      static_cast<size_t>(pops->npop) * static_cast<size_t>(pops->ncells);
+
+#pragma omp parallel num_threads(nthreads)
+  {
+    /* Slice up the bins (flat index) between threads. */
+    const size_t per_thread = (nbins_total + nthreads - 1) / nthreads;
+    const size_t start = omp_get_thread_num() * per_thread;
+    const size_t end = std::min(start + per_thread, nbins_total);
+
+    /* Allocate a local output array to avoid races. */
+    std::vector<double> local_out(out_size, 0.0);
+    std::array<int, MAX_GRID_NDIM> bin_inds;
+
+    /* Loop over the bins assigned to this thread. */
+    for (size_t ind = start; ind < end; ind++) {
+
+      /* Skip empty bins (masked out bins have empty table runs). */
+      const double mass = static_cast<double>(masses[ind]);
+      if (mass == 0.0) {
+        continue;
+      }
+
+      /* Get the bin's index along each grid axis and spread its mass onto
+       * the grid. */
+      pops->get_bin_inds(static_cast<int>(ind % pops->ncells), bin_inds);
+      spread_bin_bic(tables, pops->ndim, grid_props->dims, bin_inds, mass,
+                     local_out.data());
+    }
+
+    /* Merge local buffer into global array. */
+#pragma omp critical
+    {
+      for (int i = 0; i < out_size; i++) {
+        out[i] += local_out[i];
+      }
+    }
+  }
+}
+#endif /* WITH_OPENMP */
+
+/**
+ * @brief This calculates the grid weights of every population summed
+ *        together using a bin in cell (BIC) approach.
+ *
+ * This is a wrapper which calls the correct function based on the number of
+ * threads requested and whether OpenMP is available.
+ *
+ * All accumulation happens in a double precision scratch buffer which is
+ * cast into the output buffer once at the end, so reduced precision outputs
+ * don't suffer float32 accumulation error over many bins.
  *
  * @tparam PopReal The floating-point type of the population arrays.
  * @tparam GridReal The floating-point type of the grid axis arrays.
@@ -657,47 +789,28 @@ void weight_loop_bic(GridProps *grid_props, Populations *pops, int out_size,
 
   /* Accumulate in double regardless of the requested output precision. */
   std::vector<double> accum(out_size, 0.0);
-  const size_t nbins_total =
-      static_cast<size_t>(pops->npop) * static_cast<size_t>(pops->ncells);
+
+  /* Call the correct function for the configuration/number of threads. */
 
 #ifdef WITH_OPENMP
+
+  /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-#pragma omp parallel num_threads(nthreads)
-    {
-      /* Slice the bins of all populations between threads. */
-      const size_t per_thread = (nbins_total + nthreads - 1) / nthreads;
-      const size_t start = omp_get_thread_num() * per_thread;
-      const size_t end = std::min(start + per_thread, nbins_total);
-      std::vector<double> local(out_size, 0.0);
-      for (size_t ind = start; ind < end;) {
-        const int ipop = static_cast<int>(ind / pops->ncells);
-        const int icell = static_cast<int>(ind % pops->ncells);
-        const int stop = static_cast<int>(
-            std::min(end - ind + icell, static_cast<size_t>(pops->ncells)));
-        spread_population_bic<PopReal>(tables, grid_props, pops, ipop, icell,
-                                       stop, local.data());
-        ind += stop - icell;
-      }
-#pragma omp critical
-      {
-        for (int i = 0; i < out_size; i++) {
-          accum[i] += local[i];
-        }
-      }
-    }
-  } else {
-    for (int ipop = 0; ipop < pops->npop; ipop++) {
-      spread_population_bic<PopReal>(tables, grid_props, pops, ipop, 0,
-                                     pops->ncells, accum.data());
-    }
+    weight_loop_bic_omp<PopReal>(tables, grid_props, pops, out_size,
+                                 accum.data(), nthreads);
   }
+  /* Otherwise there's no point paying the OpenMP overhead. */
+  else {
+    weight_loop_bic_serial<PopReal>(tables, grid_props, pops, accum.data());
+  }
+
 #else
+
   (void)nthreads;
-  (void)nbins_total;
-  for (int ipop = 0; ipop < pops->npop; ipop++) {
-    spread_population_bic<PopReal>(tables, grid_props, pops, ipop, 0,
-                                   pops->ncells, accum.data());
-  }
+
+  /* We don't have OpenMP, just call the serial version. */
+  weight_loop_bic_serial<PopReal>(tables, grid_props, pops, accum.data());
+
 #endif
 
   /* Fold the double precision accumulation into the output buffer. */
@@ -709,11 +822,127 @@ void weight_loop_bic(GridProps *grid_props, Populations *pops, int out_size,
 }
 
 /**
+ * @brief Calculate the grid weights of a single population using a bin in
+ *        cell (BIC) approach.
+ *
+ * @tparam PopReal The floating-point type of the population arrays.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ * @param tables: The per axis BIC tables.
+ * @param grid_props: A struct containing the properties along each grid axis.
+ * @param pops: A struct containing the population properties.
+ * @param ipop: The population to spread onto the grid.
+ * @param accum: A grid sized double precision accumulation buffer.
+ * @param out: The (npop, grid size) output array.
+ */
+template <typename PopReal, typename OutT>
+static void weight_population_bic(
+    const std::array<BicAxisTable, MAX_GRID_NDIM> &tables,
+    GridProps *grid_props, Populations *pops, const int ipop,
+    std::vector<double> &accum, OutT *out) {
+
+  /* Get this population's masses and somewhere to store each bin's N
+   * dimensional index. */
+  const PopReal *masses =
+      pops->get_masses<PopReal>() + static_cast<size_t>(ipop) * pops->ncells;
+  std::array<int, MAX_GRID_NDIM> bin_inds;
+
+  /* Accumulate in double regardless of the requested output precision. */
+  std::fill(accum.begin(), accum.end(), 0.0);
+
+  /* Loop over the population's bins. */
+  for (int cell = 0; cell < pops->ncells; cell++) {
+
+    /* Skip empty bins (masked out bins have empty table runs). */
+    const double mass = static_cast<double>(masses[cell]);
+    if (mass == 0.0) {
+      continue;
+    }
+
+    /* Get the bin's index along each grid axis and spread its mass onto
+     * the grid. */
+    pops->get_bin_inds(cell, bin_inds);
+    spread_bin_bic(tables, pops->ndim, grid_props->dims, bin_inds, mass,
+                   accum.data());
+  }
+
+  /* Fold the double precision accumulation into the population's row. */
+  const int grid_size = grid_props->size;
+  OutT *row = out + static_cast<size_t>(ipop) * grid_size;
+  for (int i = 0; i < grid_size; i++) {
+    row[i] += static_cast<OutT>(accum[i]);
+  }
+}
+
+/**
  * @brief This calculates the grid weights of each population separately
  *        using a bin in cell (BIC) approach.
  *
- * The output has one grid sized row per population. With OpenMP the
- * populations are split between threads, each writing only its own rows.
+ * This is the serial version of the function.
+ *
+ * @tparam PopReal The floating-point type of the population arrays.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ * @param tables: The per axis BIC tables.
+ * @param grid_props: A struct containing the properties along each grid axis.
+ * @param pops: A struct containing the population properties.
+ * @param out: The (npop, grid size) output array.
+ */
+template <typename PopReal, typename OutT>
+static void weight_loop_bic_per_population_serial(
+    const std::array<BicAxisTable, MAX_GRID_NDIM> &tables,
+    GridProps *grid_props, Populations *pops, OutT *out) {
+
+  /* Loop over the populations, reusing one accumulation buffer. */
+  std::vector<double> accum(grid_props->size);
+  for (int ipop = 0; ipop < pops->npop; ipop++) {
+    weight_population_bic<PopReal, OutT>(tables, grid_props, pops, ipop, accum,
+                                         out);
+  }
+}
+
+/**
+ * @brief This calculates the grid weights of each population separately
+ *        using a bin in cell (BIC) approach.
+ *
+ * This is the parallel version of the function. The populations are split
+ * between threads, each writing only its own populations' rows.
+ *
+ * @tparam PopReal The floating-point type of the population arrays.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ * @param tables: The per axis BIC tables.
+ * @param grid_props: A struct containing the properties along each grid axis.
+ * @param pops: A struct containing the population properties.
+ * @param out: The (npop, grid size) output array.
+ * @param nthreads: The number of threads to use.
+ */
+#ifdef WITH_OPENMP
+template <typename PopReal, typename OutT>
+static void weight_loop_bic_per_population_omp(
+    const std::array<BicAxisTable, MAX_GRID_NDIM> &tables,
+    GridProps *grid_props, Populations *pops, OutT *out, int nthreads) {
+
+#pragma omp parallel num_threads(nthreads)
+  {
+    /* Each thread needs its own accumulation buffer. */
+    std::vector<double> accum(grid_props->size);
+
+    /* Loop over the populations assigned to this thread. */
+#pragma omp for schedule(static)
+    for (int ipop = 0; ipop < pops->npop; ipop++) {
+      weight_population_bic<PopReal, OutT>(tables, grid_props, pops, ipop,
+                                           accum, out);
+    }
+  }
+}
+#endif /* WITH_OPENMP */
+
+/**
+ * @brief This calculates the grid weights of each population separately
+ *        using a bin in cell (BIC) approach.
+ *
+ * The output has one grid sized row per population.
+ *
+ * This is a wrapper which calls the correct function based on the number of
+ * threads requested and whether OpenMP is available.
  *
  * @tparam PopReal The floating-point type of the population arrays.
  * @tparam GridReal The floating-point type of the grid axis arrays.
@@ -733,28 +962,29 @@ void weight_loop_bic_per_population(GridProps *grid_props, Populations *pops,
   std::array<BicAxisTable, MAX_GRID_NDIM> tables;
   build_bic_tables<PopReal, GridReal>(grid_props, pops, tables);
 
-  const int grid_size = grid_props->size;
+  /* Call the correct function for the configuration/number of threads. */
 
 #ifdef WITH_OPENMP
-#pragma omp parallel num_threads(nthreads) if (nthreads > 1)
-#endif
-  {
-    std::vector<double> accum(grid_size);
-#ifdef WITH_OPENMP
-#pragma omp for schedule(static)
-#endif
-    for (int ipop = 0; ipop < pops->npop; ipop++) {
-      std::fill(accum.begin(), accum.end(), 0.0);
-      spread_population_bic<PopReal>(tables, grid_props, pops, ipop, 0,
-                                     pops->ncells, accum.data());
-      OutT *row = out + static_cast<size_t>(ipop) * grid_size;
-      for (int i = 0; i < grid_size; i++) {
-        row[i] += static_cast<OutT>(accum[i]);
-      }
-    }
+
+  /* If we have multiple threads and OpenMP we can parallelise. */
+  if (nthreads > 1) {
+    weight_loop_bic_per_population_omp<PopReal, OutT>(tables, grid_props, pops,
+                                                      out, nthreads);
   }
-#ifndef WITH_OPENMP
+  /* Otherwise there's no point paying the OpenMP overhead. */
+  else {
+    weight_loop_bic_per_population_serial<PopReal, OutT>(tables, grid_props,
+                                                         pops, out);
+  }
+
+#else
+
   (void)nthreads;
+
+  /* We don't have OpenMP, just call the serial version. */
+  weight_loop_bic_per_population_serial<PopReal, OutT>(tables, grid_props,
+                                                       pops, out);
+
 #endif
 
   toc("weight_loop_bic_per_population");
@@ -762,7 +992,8 @@ void weight_loop_bic_per_population(GridProps *grid_props, Populations *pops,
 
 /* Explicit instantiations to satisfy multi-extension linking. All
  * (PartReal, GridReal, OutT) combinations are required by the dtype
- * dispatchers in sfzh and integrated_spectra. */
+ * dispatchers in sfzh and integrated_spectra (and, for weight_loop_bic,
+ * parametric_spectra). */
 #define INSTANTIATE_WEIGHT_LOOPS(PartReal, GridReal, OutT)                \
   template void weight_loop_cic<PartReal, GridReal, OutT>(                \
       GridProps *, Particles *, int, OutT *, const int);                  \

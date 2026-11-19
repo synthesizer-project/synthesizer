@@ -71,10 +71,12 @@ if __name__ == "__main__":
 
     para_spec = para_gal.stars.get_spectra(model)
     part_spec = gal.stars.get_spectra(model)
-    part_spec_old = gal.stars.get_spectra(
-        model,
-        mask={"incident": {"attr": "ages", "op": ">", "thresh": age_lim}},
-    )
+
+    # Mask the model to the old stars, not resampled above, then clear the
+    # mask again for the combined spectra below
+    model.add_mask(attr="ages", op=">=", thresh=age_lim)
+    part_spec_old = gal.stars.get_spectra(model)
+    model.clear_masks()
 
     """
     We can also do this directly by calling the parametric_young_stars

@@ -1708,7 +1708,7 @@ class DraineLiGrainCurves(AttenuationLaw):
     Draine and Li extinction curves obtained from pre-processing
     the extinction efficiencies for the required grain size
     distribution. This is done in the syncretize repo under
-    'syncretize/src/synthesizer_grids/dust/
+    'syncretize/src/syncretize/dust/
     create_dustextcurve_draine_li.py' for the required dust
     parameters. Currently only implemented for 2 grain sizes
     of graphites and silicates, and 1 size of PAHs.
@@ -1740,7 +1740,7 @@ class DraineLiGrainCurves(AttenuationLaw):
         Draine and Li extinction curves obtained from pre-processing the
         extinction efficiencies for the required grain size distribution. This
         is done in the syncretize repo under
-        'syncretize/src/synthesizer_grids/dust/
+        'syncretize/src/syncretize/dust/
         create_dustextcurve_draine_li.py' for the required dust parameters.
         Currently only implemented for 2 grain sizes of graphites and
         silicates, and 1 size of PAHs.

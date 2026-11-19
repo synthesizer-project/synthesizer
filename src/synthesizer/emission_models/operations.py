@@ -841,9 +841,9 @@ class Transformation:
         # so a transformer only needs to know which populations it applies
         # to (one row of the emission per population)
         if this_model.per_population and hasattr(
-            this_mask, "get_population_mask"
+            emitter, "get_population_mask"
         ):
-            this_mask = this_mask.get_population_mask(apply_to.shape[0])
+            this_mask = emitter.get_population_mask(this_mask)
 
         # Apply the transform to the emission
         emission = self.transformer._transform(

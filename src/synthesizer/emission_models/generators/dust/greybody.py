@@ -20,6 +20,8 @@ from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
+    integrate_over_all_frequencies,
+    optically_thin_luminosity,
 )
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.units import accepts
@@ -173,6 +175,30 @@ class Greybody(DustEmission):
             optically_thick_factor = 1 - np.exp(-((nu / _nu_0) ** emissivity))
             return optically_thick_factor * planck(nu, temperature)
 
+    def _bolometric_luminosity(
+        self,
+        temperature: unyt_quantity,
+        emissivity: float,
+    ) -> float:
+        """Return the integral of the unnormalised spectrum over all nu.
+
+        Args:
+            temperature (unyt_quantity):
+                The temperature to use for the greybody.
+            emissivity (float):
+                The emissivity to use for the greybody.
+
+        Returns:
+            float:
+                The bolometric luminosity in the luminosity unit of
+                Sed.bolometric_luminosity.
+        """
+        if self.optically_thin:
+            return optically_thin_luminosity(temperature, emissivity)
+        return integrate_over_all_frequencies(
+            lambda nu: self._lnu(nu, temperature, emissivity), temperature
+        )
+
     @accepts(lams=angstrom)
     @timed("Greybody._generate_spectra")
     @verify_out_precision()
@@ -238,8 +264,8 @@ class Greybody(DustEmission):
         # Create an SED object for convenience
         sed = Sed(lam=lams, lnu=lnu)
 
-        # Get the bolometric luminosity with proper units
-        bol_lum = sed._bolometric_luminosity
+        # Get the bolometric luminosity over all frequencies
+        bol_lum = self._bolometric_luminosity(temperature, emissivity)
 
         # Normalise the greybody spectrum
         sed._lnu /= bol_lum
@@ -310,8 +336,6 @@ class Greybody(DustEmission):
                 "missing. Please generate spectra first or remove the "
                 "generation of lines."
             )
-        else:
-            sed = spectra[model.label]
 
         # Get the required parameters
         params = self._extract_params(model, emitter)
@@ -322,7 +346,6 @@ class Greybody(DustEmission):
 
         # Define frequencies
         nu = (c / line_lams).to(Hz)
-        sed_nu = sed.nu
 
         # Account for CMB heating
         cmb_factor, temperature = self.apply_cmb_heating(
@@ -333,13 +356,9 @@ class Greybody(DustEmission):
 
         # Compute the greybody function
         lnu = self._lnu(nu, temperature, emissivity)
-        norm_lnu = self._lnu(sed_nu, temperature, emissivity)
 
-        # Create an SED object for convenience
-        norm_sed = Sed(lam=sed.lam, lnu=norm_lnu)
-
-        # Get the bolometric luminosity with proper units
-        bol_lum = norm_sed._bolometric_luminosity
+        # Get the bolometric luminosity over all frequencies
+        bol_lum = self._bolometric_luminosity(temperature, emissivity)
 
         # Normalise the greybody spectrum
         lnu /= bol_lum
