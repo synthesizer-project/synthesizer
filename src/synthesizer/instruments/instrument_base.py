@@ -144,6 +144,17 @@ class InstrumentBase(ABC):
         return False
 
     @property
+    def can_do_lsf_spectroscopy(self):
+        """Return whether this instrument supports LSF spectroscopy.
+
+        Returns:
+            bool: ``True`` if the instrument has the information required to
+                apply a line spread function to one-dimensional spectra,
+                otherwise ``False``.
+        """
+        return False
+
+    @property
     def can_do_resolved_spectroscopy(self):
         """Return whether this instrument supports resolved spectroscopy.
 

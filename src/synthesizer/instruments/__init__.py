@@ -47,6 +47,7 @@ globals().update(
 
 from synthesizer.instruments.utils import (
     get_lams_from_resolving_power,
+    get_lsfs_from_resolving_power,
     print_premade_instruments,
 )
 
@@ -64,6 +65,7 @@ __all__ = [
     "Filter",
     "FilterCollection",
     "get_lams_from_resolving_power",
+    "get_lsfs_from_resolving_power",
     "print_premade_instruments",
     *AVAILABLE_INSTRUMENTS,
 ]
