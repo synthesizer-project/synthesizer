@@ -2086,6 +2086,7 @@ class PopulationExtractor(IntegratedParametricExtractor):
         return spec
 
     @timed("PopulationExtractor.generate_lnu")
+    @verify_out_precision()
     def generate_lnu(
         self,
         emitter,
@@ -2176,6 +2177,7 @@ class PopulationExtractor(IntegratedParametricExtractor):
         )
 
     @timed("PopulationExtractor.generate_line")
+    @verify_out_precision()
     def generate_line(
         self,
         emitter,

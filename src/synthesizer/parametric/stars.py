@@ -658,16 +658,11 @@ class Stars(StarsComponent):
         )
 
     @timed("ParametricStars._get_bins")
-    def _get_bins(self, age_offset=None):
+    def _get_bins(self):
         """Get the bins describing the population from the SFH and ZH.
 
         The SFH and metallicity distribution are binned separately and the
         population is their product.
-
-        Args:
-            age_offset (unyt_quantity):
-                The offset to apply to the ages, e.g. to get the population
-                at an earlier time.
 
         Returns:
             tuple:
@@ -680,13 +675,8 @@ class Stars(StarsComponent):
         ):
             self._instant_sf = self._instant_sf * self.ages.units
 
-        # Bin each axis separately, offsetting the ages if requested
-        offset = (
-            0.0
-            if age_offset is None
-            else convert_in_place(age_offset, yr).value
-        )
-        age_edges, age_masses = self._get_age_bins(offset)
+        # Bin each axis separately
+        age_edges, age_masses = self._get_age_bins(0.0)
         metal_edges, metal_weights = self._get_metal_bins()
 
         # The population is the outer product of the two, with a leading
@@ -1323,11 +1313,18 @@ class Stars(StarsComponent):
         Returns:
             np.ndarray of bool:
                 Whether each population is included, or None if the mask
-                doesn't distinguish between the populations.
+                includes them all.
         """
-        # Only a mask with a range per population can tell them apart
-        if mask is None or np.ndim(mask) == 2:
+        # No mask includes every population
+        if mask is None:
             return None
+
+        # A single set of ranges treats every population alike: an empty
+        # first range (e.g. a condition they all fail) excludes them all
+        if np.ndim(mask) == 2:
+            if mask[0, 0] <= mask[0, 1]:
+                return None
+            return np.zeros(self.npop, dtype=bool)
 
         # An excluded population has an empty first range
         return mask[:, 0, 0] <= mask[:, 0, 1]
@@ -1471,17 +1468,15 @@ class Stars(StarsComponent):
             Stars:
                 The binned population(s).
         """
-        age_edges = (
-            age_edges.to("yr").value
-            if isinstance(age_edges, unyt_array)
-            else np.asarray(age_edges, dtype=np.float64)
-        )
+        # Get the edges and masses as doubles in yr and Msun (the masses
+        # are copied so scaling them never touches the caller's array)
+        if isinstance(age_edges, unyt_array):
+            age_edges = convert_in_place(age_edges, yr).ndview
+        age_edges = np.asarray(age_edges, dtype=np.float64)
         metallicity_edges = np.asarray(metallicity_edges, dtype=np.float64)
-        masses = (
-            masses.to("Msun").value
-            if isinstance(masses, unyt_array)
-            else np.array(masses, dtype=np.float64)
-        )
+        if isinstance(masses, unyt_array):
+            masses = convert_in_place(masses, Msun).ndview
+        masses = np.array(masses, dtype=np.float64)
         if masses.ndim == 2:
             masses = masses[None]
 
@@ -1794,6 +1789,12 @@ class Stars(StarsComponent):
             if self.spectra[key]._fnu is not None:
                 self.spectra[key]._fnu *= conversion
 
+        # And to the spectra of each population
+        for key in self.particle_spectra:
+            self.particle_spectra[key]._lnu *= conversion
+            if self.particle_spectra[key]._fnu is not None:
+                self.particle_spectra[key]._fnu *= conversion
+
         # Apply correction to the SFZH
         self._bin_masses *= np.asarray(conversion)
         self._set_bins(self._bin_edges, self._bin_masses)
@@ -1856,6 +1857,12 @@ class Stars(StarsComponent):
             self.spectra[key]._lnu *= conversion
             if self.spectra[key]._fnu is not None:
                 self.spectra[key]._fnu *= conversion
+
+        # And to the spectra of each population
+        for key in self.particle_spectra:
+            self.particle_spectra[key]._lnu *= conversion
+            if self.particle_spectra[key]._fnu is not None:
+                self.particle_spectra[key]._fnu *= conversion
 
         # Apply correction to the SFZH
         self._bin_masses *= np.asarray(conversion)

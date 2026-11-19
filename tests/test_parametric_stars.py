@@ -1842,6 +1842,25 @@ class TestPerPopulationEmission:
         assert np.all(pop_spec[0] == 0)
         np.testing.assert_allclose(pop_spec.sum(axis=0), expected, rtol=1e-10)
 
+    def test_mask_excluding_every_population(self, test_grid):
+        """A condition every population fails excludes them all.
+
+        Args:
+            test_grid (Grid):
+                The test grid fixture.
+        """
+        combined = Stars.from_populations(self._populations(test_grid))
+
+        # No population has a tau_v this high, so the mask keeps a single
+        # set of (empty) ranges and no population is included
+        mask = combined.get_mask("tau_v", 5.0, ">")
+        assert mask.ndim == 2
+        assert not combined.get_population_mask(mask).any()
+
+        # While a mask they all pass doesn't tell them apart
+        mask = combined.get_mask("tau_v", 0.0, ">")
+        assert combined.get_population_mask(mask) is None
+
     def test_per_population_aliases_per_particle(self, test_grid):
         """per_population is an alias of per_particle."""
         model = PacmanEmission(
@@ -2024,6 +2043,31 @@ class TestFromBinned:
             stars["c"].initial_mass, masses[2].sum() * Msun
         )
 
+    def test_single_precision_inputs(self, test_grid):
+        """Single precision inputs with units are stored as doubles.
+
+        Args:
+            test_grid (Grid):
+                The test grid fixture.
+        """
+        stars = Stars.from_binned(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            (self.EDGES / 1e6).astype(np.float32) * Myr,
+            self.METALS.astype(np.float32),
+            np.ones((4, 3), dtype=np.float32) * Msun,
+        )
+
+        # The edges are in yr and everything is double precision
+        np.testing.assert_allclose(
+            stars.get_bin_edges("ages"), self.EDGES[::-1] * yr
+        )
+        assert stars.get_bin_edges("ages").dtype == np.float64
+        assert stars.bin_masses.dtype == np.float64
+
+        # So the extraction accepts them
+        stars.get_spectra(IncidentEmission(test_grid))
+
     def test_bad_shapes_raise(self, test_grid):
         """Masses must match the edges."""
         with pytest.raises(exceptions.InconsistentArguments):
@@ -2060,3 +2104,39 @@ def test_scale_mass_by_luminosity_rescales_sfh(test_grid, filters_UVJ):
     np.testing.assert_allclose(stars.sfh, np.sum(stars.sfzh, axis=1))
     np.testing.assert_allclose(stars.metal_dist, np.sum(stars.sfzh, axis=0))
     np.testing.assert_allclose(np.sum(stars.sfh), 2e9, rtol=1e-3)
+
+
+def test_scale_mass_rescales_population_spectra(test_grid, filters_UVJ):
+    """Rescaling the mass keeps each population's spectra in step.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+        filters_UVJ (FilterCollection):
+            The UVJ filters fixture.
+    """
+    # Make two populations with integrated and per population spectra
+    stars = Stars.from_populations(
+        [
+            Stars(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                sf_hist=SFH.Constant(max_age=max_age),
+                metal_dist=0.01,
+                initial_mass=1e9 * Msun,
+            )
+            for max_age in (50 * Myr, 1 * Gyr)
+        ]
+    )
+    model = IncidentEmission(test_grid, per_population=True)
+    stars.get_spectra(model)
+
+    # Scale the mass to double the luminosity in the V band
+    lum = stars.spectra[model.label].get_photo_lnu(filters_UVJ)["V"]
+    stars.scale_mass_by_luminosity(2 * lum, filters_UVJ["V"], model.label)
+
+    # The populations still sum to the integrated spectra
+    np.testing.assert_allclose(
+        stars.population_spectra[model.label].lnu.sum(axis=0),
+        stars.spectra[model.label].lnu,
+    )
