@@ -3228,6 +3228,12 @@ class BaseGalaxy:
             spectroscopy_lsf = getattr(self, f"spectroscopy_lsf_{quantity}")
             if instrument.label not in spectroscopy_lsf:
                 spectroscopy_lsf[instrument.label] = {}
+        else:
+            # Without an LSF, discard any spectroscopy stored for this
+            # instrument when it had one
+            getattr(self, f"spectroscopy_lsf_{quantity}", {}).pop(
+                instrument.label, None
+            )
 
         # Get the labels
         labels = self.spectra.keys() if limit_to is None else limit_to

@@ -68,8 +68,11 @@ class SpectroscopicInstrument(InstrumentBase):
             with shape (nwave, nkernel). Each row corresponds to a
             wavelength in lam, and is the profile of a narrow line
             there, centred on the middle bin. Kernels must have an odd
-            number of bins and sum to unity. If not given, Gaussian kernels
-            are made from resolving_power (if set) when the instrument is
+            number of bins and sum to unity. They are in wavelength bins, so
+            the spacing of lam should change slowly across a kernel; a
+            wavelength array with a gap or a jump in spacing should be split
+            into separate instruments. If not given, Gaussian kernels are
+            made from resolving_power (if set) when the instrument is
             created.
         resolving_power_lam (unyt_array, optional): Wavelength array
             corresponding to tabulated resolving_power values. Required

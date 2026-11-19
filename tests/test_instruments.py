@@ -2225,6 +2225,12 @@ def test_galaxy_spectroscopy_applies_lsf(quantity):
         getattr(apply_lam_array(sed), quantity),
     )
 
+    # Once the instrument has no LSF, the spectroscopy stored with it is
+    # discarded
+    instrument.lsfs = None
+    get_spectroscopy(instrument)
+    assert "spec" not in spectroscopy_lsf
+
 
 def test_component_spectroscopy_applies_lsf_to_particle_spectra():
     """Component spectroscopy should apply the LSF to particle spectra too."""
@@ -2257,6 +2263,13 @@ def test_component_spectroscopy_applies_lsf_to_particle_spectra():
     # The particle spectroscopy without the LSF is kept as well
     plain = component.particle_spectroscopy_fnu["spec"]["toy"]
     assert not np.allclose(plain.fnu, particle_spec.fnu)
+
+    # Once the instrument has no LSF, the spectroscopy stored with it is
+    # discarded
+    instrument.lsfs = None
+    Component._get_spectroscopy(component, instrument, "fnu")
+    assert "spec" not in component.spectroscopy_lsf_fnu
+    assert "spec" not in component.particle_spectroscopy_lsf_fnu
 
 
 @pytest.mark.parametrize(
