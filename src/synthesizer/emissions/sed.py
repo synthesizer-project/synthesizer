@@ -34,6 +34,7 @@ from unyt import (
     h,
     kb,
     km,
+    nJy,
     s,
     unyt_array,
     unyt_quantity,
@@ -57,14 +58,15 @@ from synthesizer.extensions.spectra_operations import (
     scale_spectra_2d,
 )
 from synthesizer.photometry import PhotometryCollection
-from synthesizer.synth_warnings import warn
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import (
     Quantity,
     Units,
     accepts,
+    convert_in_place,
+    deepcopy_with_shared_units,
     get_array_quantity_view,
     get_quantity_unit,
-    get_quantity_view,
 )
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
@@ -119,6 +121,9 @@ class Sed:
     obsnu = Quantity("frequency")
     obslam = Quantity("wavelength")
 
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
+
     # The speed of light in (wavelength unit) * (frequency unit), set on first
     # use, so frequencies can be computed from the raw wavelength array.
     _c_lam_nu = None
@@ -142,9 +147,8 @@ class Sed:
         self.description = description
 
         # Set the wavelength (the frequencies are computed from it when they
-        # are first needed, see _nu)
+        # are first needed, see __getattr__)
         self.lam = lam
-        self._nu_cache = None
 
         # If no lnu is provided create an empty array with the same shape as
         # lam.
@@ -168,45 +172,154 @@ class Sed:
         self.photo_lnu = None
         self.photo_fnu = None
 
-    @property
-    def _nu(self):
-        """The frequencies of the wavelength array, computed when first needed.
+    @classmethod
+    @accepts(
+        observed_lam=angstrom,
+        observed_fnu=nJy,
+        rest_frame_lnu=erg / s / Hz,
+    )
+    def from_observed(
+        cls,
+        observed_lam,
+        observed_fnu,
+        redshift,
+        rest_frame_lnu=None,
+        description=None,
+    ):
+        """Create an Sed from observer frame wavelengths and fluxes.
 
-        Most Seds made while generating emission never use their frequencies,
-        so computing them lazily saves both the division and the array. The
-        cached array is stored with the wavelength array it was computed from,
-        so assigning a new wavelength array invalidates it.
+        The wavelengths passed here are always interpreted as observer frame
+        wavelengths. The rest frame wavelengths are derived from them as
+        observed_lam / (1 + redshift), while the observer frame wavelengths
+        and fluxes are stored exactly as given (the observer frame
+        frequencies are computed from the wavelengths).
 
-        Returns:
-            np.ndarray:
-                The frequencies, in the units of the nu Quantity, with the
-                same dtype as the wavelengths.
-        """
-        cache = getattr(self, "_nu_cache", None)
-        if cache is not None and cache[0] is self._lam:
-            return cache[1]
-
-        # Convert c once for the configured wavelength and frequency units
-        if Sed._c_lam_nu is None:
-            Sed._c_lam_nu = float(
-                c.to(Sed.__dict__["lam"].unit * Sed.__dict__["nu"].unit).value
-            )
-
-        # Divide in the wavelength dtype; unyt would promote to float64.
-        nu = np.empty_like(self._lam)
-        np.divide(Sed._c_lam_nu, self._lam, out=nu)
-        self._nu_cache = (self._lam, nu)
-        return nu
-
-    @_nu.setter
-    def _nu(self, value):
-        """Store frequencies alongside the wavelengths they belong to.
+        The rest frame luminosity is never derived from the flux, since the
+        flux can include IGM absorption and peculiar velocity shifts, and the
+        Sed does not store the cosmology needed to invert the luminosity
+        distance. If it is not passed, the rest frame luminosity is NaN.
+        Rest frame operations (e.g. sum and get_resampled_sed) treat NaN as
+        zero, so this unknown luminosity only survives observer frame work.
 
         Args:
-            value (np.ndarray):
-                The frequencies, in the units of the nu Quantity.
+            observed_lam (unyt_array of float):
+                The observer frame wavelength array.
+            observed_fnu (unyt_array of float):
+                The observer frame spectral flux density, defined on
+                observed_lam (the final axis must match observed_lam).
+            redshift (float):
+                The redshift of the spectra, used to derive the rest frame
+                wavelengths from the observer frame wavelengths.
+            rest_frame_lnu (unyt_array of float, optional):
+                The rest frame spectral luminosity density, defined on the
+                rest frame wavelengths observed_lam / (1 + redshift) (i.e. the
+                same shape as observed_fnu). If None the luminosity is NaN.
+            description (str, optional):
+                An optional descriptive string defining the Sed.
+
+        Returns:
+            Sed
+                A new Sed holding the observer frame spectra.
+
+        Raises:
+            InconsistentArguments
+                If the shapes of the fluxes, luminosities and wavelengths are
+                incompatible.
         """
-        self._nu_cache = (self._lam, value)
+        # The fluxes must be defined on the observer frame wavelengths
+        if observed_fnu.shape[-1] != observed_lam.size:
+            raise exceptions.InconsistentArguments(
+                "observed_fnu must be defined on observed_lam "
+                f"(got {observed_fnu.shape} and {observed_lam.shape})"
+            )
+
+        # The luminosities must match the fluxes element for element
+        if rest_frame_lnu is not None and (
+            rest_frame_lnu.shape != observed_fnu.shape
+        ):
+            raise exceptions.InconsistentArguments(
+                "rest_frame_lnu must have the same shape as observed_fnu "
+                f"(got {rest_frame_lnu.shape} and {observed_fnu.shape})"
+            )
+
+        # Without a rest frame luminosity we flag it as unknown with NaNs
+        # rather than deriving it from the flux
+        if rest_frame_lnu is None:
+            rest_frame_lnu = unyt_array(
+                np.full(observed_fnu.shape, np.nan, dtype=observed_fnu.dtype),
+                erg / s / Hz,
+            )
+
+        # Create the Sed on the rest frame wavelengths
+        sed = cls(
+            observed_lam / (1.0 + redshift),
+            rest_frame_lnu,
+            description=description,
+        )
+
+        # Store the observer frame spectra exactly as given
+        sed.redshift = redshift
+        sed.obslam = observed_lam
+        sed.obsnu = sed.nu / (1.0 + redshift)
+        sed.fnu = observed_fnu
+
+        return sed
+
+    def __setattr__(self, name, value):
+        """Set an attribute, dropping cached frequencies with the wavelengths.
+
+        Args:
+            name (str):
+                The name of the attribute.
+            value (Any):
+                The value to set.
+        """
+        # The frequencies are computed lazily from the wavelengths (see
+        # __getattr__), so new wavelengths make them stale
+        if name in ("lam", "_lam"):
+            self.__dict__.pop("_nu", None)
+        object.__setattr__(self, name, value)
+
+    def __getattr__(self, name):
+        """Compute the frequencies the first time they are needed.
+
+        Most Seds made while generating emission never use their frequencies,
+        so they are not computed on initialisation. This is only called when
+        normal attribute lookup fails, i.e. when nu hasn't been stored yet.
+
+        Args:
+            name (str):
+                The name of the attribute being accessed.
+
+        Returns:
+            The value of the attribute.
+
+        Raises:
+            AttributeError:
+                If the attribute is anything other than an uncomputed nu.
+        """
+        if name in ("nu", "_nu") and "_lam" in self.__dict__:
+            # Convert c once for the configured wavelength and frequency units
+            if Sed._c_lam_nu is None:
+                Sed._c_lam_nu = float(
+                    c.to(
+                        Sed.__dict__["lam"].unit * Sed.__dict__["nu"].unit
+                    ).value
+                )
+
+            # Divide in the wavelength dtype (at least float32 for integer
+            # wavelengths); unyt would promote to float64.
+            nu = np.empty(
+                self._lam.shape,
+                dtype=np.result_type(self._lam.dtype, np.float32),
+            )
+            np.divide(Sed._c_lam_nu, self._lam, out=nu)
+            self._nu = nu
+            return getattr(self, name)
+
+        raise AttributeError(
+            f"{type(self).__name__} object has no attribute '{name}'"
+        )
 
     @timed("Sed.sum")
     def sum(self, nthreads=1):
@@ -684,7 +797,9 @@ class Sed:
             flux (unyt_array):
                 The spectral flux density per Angstrom array.
         """
-        return (self.obsnu * self.fnu / self.obslam).to("erg/s/cm**2/angstrom")
+        return convert_in_place(
+            self.obsnu * self.fnu / self.obslam, "erg/s/cm**2/angstrom"
+        )
 
     @property
     def _flam(self):
@@ -984,7 +1099,7 @@ class Sed:
             # Compute lnu
             lnu = lum / tran * get_quantity_unit(self, "lnu")
 
-        return lnu.to(get_quantity_unit(self, "lnu"))
+        return convert_in_place(lnu, get_quantity_unit(self, "lnu"))
 
     @accepts(blue=angstrom, red=angstrom)
     def measure_break(self, blue, red, nthreads=1, integration_method="trapz"):
@@ -1226,8 +1341,8 @@ class Sed:
         )
 
         # Set the observed wavelength and frequency
-        self._obslam = self._lam
-        self._obsnu = self._nu
+        self.obslam = self.lam
+        self.obsnu = self.nu
 
         # Get the conversion factor from luminosity to flux at 10 pc
         conversion = get_attr_unit_conversion(
@@ -1250,7 +1365,7 @@ class Sed:
         )
 
         # Return the fnu with units, without making a copy
-        return get_quantity_view(self, "_fnu")
+        return self.fnu
 
     @accepts(peculiar_velocity=km / s)
     @timed("Sed.get_fnu")
@@ -1262,6 +1377,7 @@ class Sed:
         nthreads=1,
         out_dtype=None,
         peculiar_velocity=None,
+        emitter=None,
     ):
         """Calculate the observed frame spectral energy distribution.
 
@@ -1290,6 +1406,9 @@ class Sed:
                 Line-of-sight peculiar velocity (positive = receding). Shifts
                 the spectrum to z_obs with 1 + z_obs = (1 + z)(1 + v / c);
                 distance and IGM stay at z. Defaults to None (no shift).
+            emitter (Galaxy/Stars/BlackHoles, optional):
+                The emitter of the spectra. The IGM looks for its parameters
+                on this before falling back to its own. Defaults to None.
 
         Returns:
             fnu (ndarray)
@@ -1330,9 +1449,19 @@ class Sed:
         # The observer frame arrays are at z_obs (e.g. for resampling)
         self.redshift = z_obs
 
-        if self._obslam is None or self._obslam.shape != self._lam.shape:
+        # NOTE: get_fnu0 shares the rest frame arrays, which compute_fnu
+        # would overwrite, so those need fresh buffers too.
+        if (
+            self._obslam is None
+            or self._obslam.shape != self._lam.shape
+            or np.shares_memory(self._obslam, self._lam)
+        ):
             self._obslam = np.empty_like(self._lam)
-        if self._obsnu is None or self._obsnu.shape != self._nu.shape:
+        if (
+            self._obsnu is None
+            or self._obsnu.shape != self._nu.shape
+            or np.shares_memory(self._obsnu, self._nu)
+        ):
             self._obsnu = np.empty_like(self._nu)
 
         # Calculate the observed wavelength and frequency
@@ -1366,22 +1495,16 @@ class Sed:
 
         # If we are applying an IGM model apply it
         if igm is not None:
-            # Bypass the Quantity descriptor here so IGM attenuation reuses the
-            # observer-frame wavelength buffer without allocating a new
-            # unit-bearing array wrapper via multiplication.
-            obslam = get_array_quantity_view(
-                self._obslam,
-                self.__class__.__dict__["obslam"].unit,
-            )
+            obslam = self.obslam
 
             # Support bot class references and instantiated objects
             if callable(igm):
-                self._fnu *= igm().get_transmission(z, obslam)
+                self._fnu *= igm().get_transmission(z, obslam, emitter)
             else:
-                self._fnu *= igm.get_transmission(z, obslam)
+                self._fnu *= igm.get_transmission(z, obslam, emitter)
 
         # Return the fnu with units, without making a copy
-        return get_quantity_view(self, "_fnu")
+        return self.fnu
 
     @timed("Sed.get_photo_lnu")
     def get_photo_lnu(
@@ -1606,7 +1729,6 @@ class Sed:
 
         return index
 
-    @timed("Sed.get_resampled_sed")
     def cast(self, dtype):
         """Cast the spectra arrays to a new floating-point dtype in place.
 
@@ -1629,6 +1751,7 @@ class Sed:
             self._fnu = self._fnu.astype(dtype)
         return self
 
+    @timed("Sed.get_resampled_sed")
     def get_resampled_sed(self, resample_factor=None, new_lam=None):
         """Resample the spectra onto a new set of wavelength points.
 
@@ -1641,7 +1764,9 @@ class Sed:
                 The number of additional wavelength elements to
                 resample to.
             new_lam (np.ndarray of float):
-                The wavelength array to resample onto.
+                The rest frame wavelength array to resample onto. To resample
+                onto observer frame wavelengths use
+                get_resampled_observed_sed instead.
 
         Returns:
             Sed
@@ -1715,14 +1840,78 @@ class Sed:
 
         return sed
 
+    @timed("Sed.get_resampled_observed_sed")
+    def get_resampled_observed_sed(self, new_observed_lam):
+        """Resample the spectra onto a new set of observer frame wavelengths.
+
+        The fluxes are resampled directly onto new_observed_lam, so the
+        observer frame wavelengths of the result are exactly
+        new_observed_lam. The luminosities are resampled onto the matching
+        rest frame wavelengths, new_observed_lam / (1 + redshift).
+
+        Args:
+            new_observed_lam (unyt_array of float):
+                The observer frame wavelength array to resample onto.
+
+        Returns:
+            Sed
+                A new Sed with the resampled spectra.
+
+        Raises:
+            MissingSpectraType
+                If the observer frame fluxes have not been computed.
+        """
+        # We can only resample in the observer frame if we have fluxes
+        if self.fnu is None:
+            raise exceptions.MissingSpectraType(
+                "Observer frame resampling needs fluxes, call get_fnu first."
+            )
+
+        # Resample the fluxes directly onto the observer frame wavelengths
+        # (spectres always returns float64, so restore the input precision)
+        fnu = spectres(
+            new_observed_lam,
+            self._obslam,
+            self._fnu,
+            fill=0.0,
+            verbose=False,
+        ).astype(self._fnu.dtype, copy=False)
+
+        # Resample the luminosities onto the matching rest frame wavelengths
+        lnu = spectres(
+            new_observed_lam / (1.0 + self.redshift),
+            self._lam,
+            self._lnu,
+            fill=0.0,
+            verbose=False,
+        ).astype(self._lnu.dtype, copy=False)
+
+        # Clean up nans in the fluxes, we shouldn't get them but they do
+        # appear sometimes. The luminosities are left as they are so unknown
+        # (NaN) luminosities from from_observed stay unknown.
+        np.nan_to_num(fnu, copy=False)
+
+        # Build the new Sed from the observer frame spectra
+        sed = Sed.from_observed(
+            new_observed_lam,
+            fnu * get_quantity_unit(self, "fnu"),
+            self.redshift,
+            rest_frame_lnu=lnu * get_quantity_unit(self, "lnu"),
+        )
+        sed.vel_shifted = self.vel_shifted
+
+        return sed
+
+    @deprecated(
+        "is deprecated and will be removed in version 1.4.0. "
+        "Use instrument.apply_lam_array_fnu(sed) (observer frame) or "
+        "instrument.apply_lam_array_lnu(sed) (rest frame) instead."
+    )
     def apply_instrument_lams(self, instrument, nthreads=1):
         """Apply an instrument to the spectra.
 
-        This will resample a Sed object on to the instrument's wavelength
-        array. It is actually just an intuitive wrapper around
-        get_resampled_sed which will handle the actual resampling of
-        both lnu and fnu (if applicable) using the instrument's
-        wavelength array.
+        Deprecated alias for instrument.apply_lam_array_fnu, which treats the
+        instrument wavelengths as observer frame wavelengths.
 
         Args:
             instrument (Instrument):
@@ -1740,7 +1929,9 @@ class Sed:
             raise exceptions.InconsistentArguments(
                 f"{instrument.label} Instrument cannot do spectroscopy"
             )
-        return self.get_resampled_sed(new_lam=instrument.lam)
+
+        # Defer to the instrument's observer frame resampling
+        return instrument.apply_lam_array_fnu(self, nthreads=nthreads)
 
     @timed("Sed.apply_attenuation")
     def apply_attenuation(

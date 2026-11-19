@@ -34,13 +34,15 @@ from synthesizer.extensions.particle_spectra import (
     compute_particle_seds,
 )
 from synthesizer.synth_warnings import warn
-from synthesizer.units import get_quantity_unit
+from synthesizer.units import convert_in_place, get_quantity_unit
+from synthesizer.utils import depluralize, pluralize
 from synthesizer.utils.operation_timers import timed, timer
 from synthesizer.utils.precision import (
     resolve_out_dtype,
     verify_out_precision,
     weighted_sum_fits,
 )
+from synthesizer.utils.util_funcs import get_attr_unit_conversion
 
 
 class Extractor(ABC):
@@ -152,153 +154,6 @@ class Extractor(ABC):
         # Finally, attach a pointer to the grid object
         self._grid = grid
 
-    @timed("Extractor.get_emitter_attrs")
-    def get_emitter_attrs(self, emitter, model, do_grid_check):
-        """Get the attributes from the emitter.
-
-        Args:
-            emitter (Stars/BlackHoles/Gas):
-                The emitter object.
-            model (EmissionModel):
-                The emission model object.
-            do_grid_check (bool):
-                Whether to check how many particles lie outside the grid. This
-                is a sanity check that can be used to check the consistency
-                of your particles with the grid. It is False by default
-                because the check is extreme expensive.
-
-        Returns:
-            tuple
-                The extracted attributes and the weight variable.
-        """
-        # Set up a list to store the extracted attributes
-        extracted = []
-
-        # Loop over the attributes we need to extract
-        for axis, units, log in zip(
-            self._emitter_attributes,
-            self._axes_units,
-            self._log_emitter_attr,
-        ):
-            # Get the attribute from the emitter
-            value = get_param(axis, model, None, emitter, preserve_units=True)
-
-            # Convert the units if necessary
-            if isinstance(value, (unyt_array, unyt_quantity)):
-                if log or units == "dimensionless":
-                    value = value.value
-                # Grid axis units are stored as strings, and a Unit never
-                # compares equal to a str, so coerce before comparing or every
-                # attribute looks mismatched and gets copied.
-                elif value.units == Unit(units):
-                    # Already in the grid's units, so read the emitter's buffer
-                    # directly. The kernels only read it and need it
-                    # contiguous, which it already is unless the emitter holds
-                    # a strided view.
-                    value = np.ascontiguousarray(value.ndview)
-                else:
-                    # Convert out of place: this value came off the emitter,
-                    # so it is a view onto the emitter's stored array and
-                    # converting it in place would rewrite the particle data.
-                    value = value.to(units).ndview
-
-            # We know that the extracted values must be arrays, this can not be
-            # the case when we only have 1 value (i.e. a single particle, or
-            # singular valued parametric property) so here we make sure that
-            # we have a 1D array for everything we are returning
-            value = np.atleast_1d(value)
-
-            # Append the extracted value to the list
-            extracted.append(value)
-
-        # Single values (e.g. scalar defaults like ionisation_parameter_blr
-        # or fixed model parameters) are broadcast to every particle. Give
-        # them the precision of the per-particle attributes so they don't
-        # break the extension's shared-dtype requirement.
-        per_particle = [v for v in extracted if v.size > 1]
-        if per_particle and len(per_particle) < len(extracted):
-            dtype = np.result_type(*per_particle)
-            extracted = [
-                v.astype(dtype, copy=False) if v.size == 1 else v
-                for v in extracted
-            ]
-
-        # Check if the attributes are outside the grid axes if necessary
-        if do_grid_check:
-            self.check_emitter_attrs(extracted)
-
-        # Also extract the weight variable, at the same precision as the
-        # extracted attributes if we have to make unit weights (the extension
-        # requires the weights and attributes to share a dtype)
-        weight = self._get_emitter_weights(
-            emitter, model, dtype=np.result_type(*extracted)
-        )
-
-        return tuple(extracted), weight
-
-    def _get_emitter_weights(self, emitter, model, dtype=np.float64):
-        """Get the weights the grid is weighted by for the emitter.
-
-        Args:
-            emitter (Stars/BlackHoles/Gas):
-                The emitter object.
-            model (EmissionModel):
-                The emission model object.
-            dtype (np.dtype):
-                The dtype of the unit weights made when the grid has no
-                weight variable.
-
-        Returns:
-            np.ndarray/float:
-                The weights, without units.
-        """
-        if self._weight_var in [None, "None"]:
-            # If no weight variable is provided, use a weight of 1.0
-            if hasattr(emitter, "nparticles"):
-                weight = np.ones(emitter.nparticles, dtype=dtype)
-            else:
-                weight = 1.0
-        else:
-            weight = get_param(self._weight_var, model, None, emitter)
-
-        # Remove the units from the weight if necessary
-        if isinstance(weight, (unyt_array, unyt_quantity)):
-            weight = weight.ndview
-
-        return weight
-
-    @timed("Extractor.check_emitter_attrs")
-    def check_emitter_attrs(self, emitter, extracted_attrs):
-        """Compute the fraction of emitter attributes outside the grid axes.
-
-        This is by default not run but can be invoked via the do_grid_check
-        argument in the generate_lnu and generate_line methods.
-
-        Args:
-            emitter (Stars/BlackHoles/Gas):
-                The emitter from which the attributes were extracted.
-            extracted_attrs (tuple):
-                The extracted attributes from the emitter.
-        """
-        # Loop over the extracted attributes and check if they are outside the
-        # grid axes, we'll do this by updating a mask for each attribute
-        inside = np.zeros_like(extracted_attrs[0], dtype=bool)
-        for i, (attr, axis) in enumerate(
-            zip(extracted_attrs, self._grid_axes),
-        ):
-            inside |= (attr >= axis.min()) & (attr <= axis.max())
-
-        # Compute the fraction of attributes outside the grid axes
-        frac_outside = 1 - np.sum(inside) / len(inside)
-
-        # Warn the user if the fraction is greater than 0.0
-        if frac_outside > 0.0:
-            warn(
-                f"Found a {emitter.__class__.__name__} with "
-                f"{frac_outside * 100:.2f}% of the attributes outside"
-                " the grid axes.",
-            )
-
     def _spectra_extraction_fits_dtype(self, dtype, emitter, model, **kwargs):
         """Check whether this spectra extraction fits the output dtype.
 
@@ -369,8 +224,240 @@ class Extractor(ABC):
         """Extract the line luminosities from the grid for the emitter."""
         pass
 
+    def _can_cache_grid_weights(self, model, mask):
+        """Check whether the emitter's stored grid weights can be used.
 
-class IntegratedParticleExtractor(Extractor):
+        The grid weights only depend on the emitter and the grid unless a
+        mask is applied or the model fixes one of the attributes (or the
+        weight variable) the grid is weighted by, in which case they are
+        specific to this extraction and must be neither reused nor stored.
+
+        Args:
+            model (EmissionModel):
+                The emission model object.
+            mask (np.ndarray of bool):
+                The mask applied to the emitter, or None.
+
+        Returns:
+            bool:
+                True if the stored grid weights can be reused and stored.
+        """
+        # Masked weights are always specific to the extraction
+        if mask is not None:
+            return False
+
+        # Check whether the model fixes any of the attributes or the weight
+        # variable under any name get_param would resolve them by (with or
+        # without a log10 prefix, singular or plural)
+        fixed = getattr(model, "fixed_parameters", {})
+        return not any(
+            alias in fixed
+            for name in (*self._emitter_attributes, str(self._weight_var))
+            for base in (name, name.replace("log10", ""))
+            for alias in (base, depluralize(base), pluralize(base))
+        )
+
+    @abstractmethod
+    def get_emitter_attrs(self, emitter, model, do_grid_check):
+        """Get the attributes from the emitter.
+
+        Args:
+            emitter (Stars/BlackHoles/Gas):
+                The emitter object.
+            model (EmissionModel):
+                The emission model object.
+            do_grid_check (bool):
+                Whether to check how much of the emitter lies outside the
+                grid.
+
+        Returns:
+            tuple
+                The extracted attributes and the weight variable. A
+                parametric extractor also returns the bin axis matching each
+                grid axis and each grid axis' unit conversion factor (see
+                ParametricExtractorBase.get_emitter_attrs).
+        """
+        pass
+
+    @abstractmethod
+    def _get_emitter_weights(self, emitter, model, dtype=np.float64):
+        """Get the weights the grid is weighted by for the emitter.
+
+        Args:
+            emitter (Stars/BlackHoles/Gas):
+                The emitter object.
+            model (EmissionModel):
+                The emission model object.
+            dtype (np.dtype):
+                The dtype of any weights made by the extractor.
+
+        Returns:
+            np.ndarray/float:
+                The weights, without units.
+        """
+        pass
+
+
+class ParticleExtractorBase(Extractor):
+    """An abstract base class for extracting the emission of particles.
+
+    This class provides the machinery to extract each particle's attributes
+    corresponding to the grid axes and the weights the grid is weighted by.
+    Any particle Extractor must inherit from this class.
+    """
+
+    @timed("ParticleExtractorBase.get_emitter_attrs")
+    def get_emitter_attrs(self, emitter, model, do_grid_check):
+        """Get the attributes from the emitter.
+
+        Args:
+            emitter (Stars/BlackHoles/Gas):
+                The emitter object.
+            model (EmissionModel):
+                The emission model object.
+            do_grid_check (bool):
+                Whether to check how many particles lie outside the grid. This
+                is a sanity check that can be used to check the consistency
+                of your particles with the grid. It is False by default
+                because the check is extreme expensive.
+
+        Returns:
+            tuple
+                The extracted attributes and the weight variable.
+        """
+        # Set up a list to store the extracted attributes
+        extracted = []
+
+        # Loop over the attributes we need to extract
+        for axis, units, log in zip(
+            self._emitter_attributes,
+            self._axes_units,
+            self._log_emitter_attr,
+        ):
+            # Get the attribute from the emitter
+            value = get_param(axis, model, None, emitter, preserve_units=True)
+
+            # Convert the units if necessary
+            if isinstance(value, (unyt_array, unyt_quantity)):
+                if log or units == "dimensionless":
+                    value = np.ascontiguousarray(value.ndview)
+                # Grid axis units are stored as strings, and a Unit never
+                # compares equal to a str, so coerce before comparing or every
+                # attribute looks mismatched and gets copied.
+                elif value.units == Unit(units):
+                    # Already in the grid's units, so read the emitter's buffer
+                    # directly. The kernels only read it and need it
+                    # contiguous, which it already is unless the emitter holds
+                    # a strided view.
+                    value = np.ascontiguousarray(value.ndview)
+                else:
+                    # Convert in place: this value is the emitter's stored
+                    # array, which records the conversion in its units.
+                    value = np.ascontiguousarray(
+                        convert_in_place(value, units).ndview
+                    )
+
+            # We know that the extracted values must be arrays, this can not be
+            # the case when we only have 1 value (i.e. a single particle, or
+            # singular valued parametric property) so here we make sure that
+            # we have a 1D array for everything we are returning
+            value = np.atleast_1d(value)
+
+            # Append the extracted value to the list
+            extracted.append(value)
+
+        # Single values (e.g. scalar defaults like ionisation_parameter_blr
+        # or fixed model parameters) are broadcast to every particle. Give
+        # them the precision of the per-particle attributes so they don't
+        # break the extension's shared-dtype requirement.
+        per_particle = [v for v in extracted if v.size > 1]
+        if per_particle and len(per_particle) < len(extracted):
+            dtype = np.result_type(*per_particle)
+            extracted = [
+                v.astype(dtype, copy=False) if v.size == 1 else v
+                for v in extracted
+            ]
+
+        # Check if the attributes are outside the grid axes if necessary
+        if do_grid_check:
+            self.check_emitter_attrs(emitter, extracted)
+
+        # Also extract the weight variable, at the same precision as the
+        # extracted attributes if we have to make unit weights (the extension
+        # requires the weights and attributes to share a dtype)
+        weight = self._get_emitter_weights(
+            emitter, model, dtype=np.result_type(*extracted)
+        )
+
+        return tuple(extracted), weight
+
+    def _get_emitter_weights(self, emitter, model, dtype=np.float64):
+        """Get the weights the grid is weighted by for the emitter.
+
+        Args:
+            emitter (Stars/BlackHoles/Gas):
+                The emitter object.
+            model (EmissionModel):
+                The emission model object.
+            dtype (np.dtype):
+                The dtype of the unit weights made when the grid has no
+                weight variable.
+
+        Returns:
+            np.ndarray/float:
+                The weights, without units.
+        """
+        if self._weight_var in [None, "None"]:
+            # If no weight variable is provided, use a weight of 1.0
+            if hasattr(emitter, "nparticles"):
+                weight = np.ones(emitter.nparticles, dtype=dtype)
+            else:
+                weight = 1.0
+        else:
+            weight = get_param(self._weight_var, model, None, emitter)
+
+        # Remove the units from the weight if necessary
+        if isinstance(weight, (unyt_array, unyt_quantity)):
+            weight = weight.ndview
+
+        return weight
+
+    @timed("ParticleExtractorBase.check_emitter_attrs")
+    def check_emitter_attrs(self, emitter, extracted_attrs):
+        """Compute the fraction of emitter attributes outside the grid axes.
+
+        This is by default not run but can be invoked via the do_grid_check
+        argument in the generate_lnu and generate_line methods.
+
+        Args:
+            emitter (Stars/BlackHoles/Gas):
+                The emitter from which the attributes were extracted.
+            extracted_attrs (tuple):
+                The extracted attributes from the emitter.
+        """
+        # Loop over the extracted attributes and check if they are outside the
+        # grid axes, we'll do this by updating a mask for each attribute (a
+        # particle is only inside if it is inside along every axis, and
+        # single values are broadcast to every particle)
+        inside = np.ones(np.broadcast(*extracted_attrs).shape, dtype=bool)
+        for i, (attr, axis) in enumerate(
+            zip(extracted_attrs, self._grid_axes),
+        ):
+            inside &= (attr >= axis.min()) & (attr <= axis.max())
+
+        # Compute the fraction of attributes outside the grid axes
+        frac_outside = 1 - np.sum(inside) / len(inside)
+
+        # Warn the user if the fraction is greater than 0.0
+        if frac_outside > 0.0:
+            warn(
+                f"Found a {emitter.__class__.__name__} with "
+                f"{frac_outside * 100:.2f}% of the attributes outside"
+                " the grid axes.",
+            )
+
+
+class IntegratedParticleExtractor(ParticleExtractorBase):
     """A class to extract the integrated emission from a particle.
 
     This Extractor will produce integrated emission from particle based
@@ -453,8 +540,8 @@ class IntegratedParticleExtractor(Extractor):
             if nthreads == -1:
                 nthreads = os.cpu_count()
 
-            # Get the grid_weights if they exist and we don't have a mask
-            if mask is None:
+            # Get the grid_weights if they exist and can be reused
+            if self._can_cache_grid_weights(model, mask):
                 grid_weights = emitter._grid_weights.get(
                     grid_assignment_method.lower(),
                     {},
@@ -483,10 +570,10 @@ class IntegratedParticleExtractor(Extractor):
             emitter_attr_names,
         )
 
-        # If we have no mask then lets store the grid weights in case
+        # If the grid weights can be reused then lets store them in case
         # we can make use of them later
         if (
-            mask is None
+            self._can_cache_grid_weights(model, mask)
             and self._grid.grid_name
             not in emitter._grid_weights[grid_assignment_method.lower()]
         ):
@@ -579,8 +666,8 @@ class IntegratedParticleExtractor(Extractor):
             if nthreads == -1:
                 nthreads = os.cpu_count()
 
-            # Get the grid_weights if they exist and we don't have a mask
-            if mask is None:
+            # Get the grid_weights if they exist and can be reused
+            if self._can_cache_grid_weights(model, mask):
                 grid_weights = emitter._grid_weights.get(
                     grid_assignment_method.lower(),
                     {},
@@ -632,10 +719,10 @@ class IntegratedParticleExtractor(Extractor):
             emitter_attr_names,
         )
 
-        # If we have no mask then lets store the grid weights in case
+        # If the grid weights can be reused then lets store them in case
         # we can make use of them later
         if (
-            mask is None
+            self._can_cache_grid_weights(model, mask)
             and self._grid.grid_name
             not in emitter._grid_weights[grid_assignment_method.lower()]
         ):
@@ -651,7 +738,7 @@ class IntegratedParticleExtractor(Extractor):
         )
 
 
-class DopplerShiftedParticleExtractor(Extractor):
+class DopplerShiftedParticleExtractor(ParticleExtractorBase):
     """A class to extract the Doppler shifted emission from a particle.
 
     This Extractor will produce a Doppler shifted spectra for each particle
@@ -815,7 +902,7 @@ class DopplerShiftedParticleExtractor(Extractor):
         )
 
 
-class IntegratedDopplerShiftedParticleExtractor(Extractor):
+class IntegratedDopplerShiftedParticleExtractor(ParticleExtractorBase):
     """A class to extract the Doppler shifted emission from a particle.
 
     This Extractor will produce the integrated Doppler shifted spectra for
@@ -944,7 +1031,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         )
 
 
-class ParticleExtractor(Extractor):
+class ParticleExtractor(ParticleExtractorBase):
     """A class to extract the emission from a particle.
 
     This Extractor will produce a spectra for each particle in a particle
@@ -1055,12 +1142,12 @@ class ParticleExtractor(Extractor):
             if nthreads == -1:
                 nthreads = os.cpu_count()
 
-        # Get the grid_weights if they exist and we don't have a mask. The
+        # Get the grid_weights if they exist and can be reused. The
         # particle spectra extraction no longer reduces to the integrated
         # spectra; the integrated machinery is cheaper than reducing the full
         # per-particle spectra array.
         emitter_attr_names = (*self._emitter_attributes, self._weight_label)
-        if mask is None:
+        if self._can_cache_grid_weights(model, mask):
             grid_weights = emitter._grid_weights.get(
                 grid_assignment_method.lower(),
                 {},
@@ -1107,10 +1194,10 @@ class ParticleExtractor(Extractor):
             emitter_attr_names,
         )
 
-        # If we have no mask then lets store the grid weights in case
+        # If the grid weights can be reused then lets store them in case
         # we can make use of them later.
         if (
-            mask is None
+            self._can_cache_grid_weights(model, mask)
             and self._grid.grid_name
             not in emitter._grid_weights[grid_assignment_method.lower()]
         ):
@@ -1258,11 +1345,11 @@ class ParticleExtractor(Extractor):
             grid_dims = np.array(self._grid_dims)
             grid_dims[-1] = self._grid.nlines
 
-        # Get the grid_weights if they exist and we don't have a mask. The
+        # Get the grid_weights if they exist and can be reused. The
         # integrated line spectra are computed through the integrated machinery
         # rather than by reducing the per-particle line arrays.
         emitter_attr_names = (*self._emitter_attributes, self._weight_label)
-        if mask is None:
+        if self._can_cache_grid_weights(model, mask):
             grid_weights = emitter._grid_weights.get(
                 grid_assignment_method.lower(),
                 {},
@@ -1347,10 +1434,10 @@ class ParticleExtractor(Extractor):
             emitter_attr_names,
         )
 
-        # If we have no mask then lets store the grid weights in case
+        # If the grid weights can be reused then lets store them in case
         # we can make use of them later.
         if (
-            mask is None
+            self._can_cache_grid_weights(model, mask)
             and self._grid.grid_name
             not in emitter._grid_weights[grid_assignment_method.lower()]
         ):
@@ -1396,7 +1483,282 @@ class ParticleExtractor(Extractor):
         return part_line, integrated_line
 
 
-class IntegratedParametricExtractor(Extractor):
+class ParametricExtractorBase(Extractor):
+    """An abstract base class for extracting the emission of populations.
+
+    A parametric population is a set of bins (e.g. in age and metallicity)
+    each holding a mass, which are spread onto the grid with the bin in cell
+    (BIC) approach (see synthesizer.extensions.parametric_spectra). This
+    class provides the machinery to extract the bin edges corresponding to
+    the grid axes and the bin masses the grid is weighted by. Any parametric
+    Extractor must inherit from this class.
+    """
+
+    @timed("ParametricExtractorBase.get_emitter_attrs")
+    def get_emitter_attrs(self, emitter, model, do_grid_check):
+        """Get the attributes from the emitter.
+
+        The attributes are the bin edges along each grid axis. A grid axis
+        the emitter isn't binned along, or one the model fixes, has all the
+        mass at a single value, so every bin along it collapses onto that
+        value. The edges and masses keep the emitter's own units and axis
+        order, so we also return the bin axis matching each grid axis and
+        the factor converting each axis' edges into the grid's units.
+
+        Args:
+            emitter (Stars):
+                The parametric emitter object.
+            model (EmissionModel):
+                The emission model object.
+            do_grid_check (bool):
+                Whether to check how much of the mass lies outside the grid.
+                This is a sanity check that can be used to check the
+                consistency of your populations with the grid. It is False
+                by default.
+
+        Returns:
+            tuple
+                The extracted attributes, the weight variable, the bin axis
+                matching each grid axis and the unit conversion factor for
+                each grid axis.
+
+        Raises:
+            InconsistentArguments:
+                If the emitter is binned along an axis the grid doesn't have,
+                or a grid axis the emitter isn't binned along doesn't have a
+                single value.
+        """
+        # Get the bin axis behind each grid axis (without any log10 prefix)
+        grid_bin_axes = [
+            axis.replace("log10", "") for axis in self._emitter_attributes
+        ]
+
+        # Every axis the emitter is binned along must be a grid axis
+        if not set(emitter.bin_axes) <= set(grid_bin_axes):
+            raise exceptions.InconsistentArguments(
+                f"The grid's axes ({self._emitter_attributes}) don't include "
+                f"every axis the {emitter.__class__.__name__} is binned "
+                f"along ({emitter.bin_axes})."
+            )
+
+        # Extract the weight variable first, any grid axes the emitter isn't
+        # binned along are its trailing (length 1) axes
+        weight = self._get_emitter_weights(emitter, model)
+        next_axis = len(emitter.bin_axes)
+
+        # Set up lists to store the extracted attributes, the bin axis
+        # matching each grid axis and its unit conversion factor
+        extracted = []
+        bin_axes = []
+        unit_scales = []
+
+        # Loop over the attributes we need to extract
+        for axis, bin_axis, units, log in zip(
+            self._emitter_attributes,
+            grid_bin_axes,
+            self._axes_units,
+            self._log_emitter_attr,
+        ):
+            # If the emitter is binned along this axis (and the model doesn't
+            # fix it) we can use its bin edges as they are
+            if (
+                bin_axis in emitter.bin_axes
+                and axis not in model.fixed_parameters
+            ):
+                # Get the bin edges and the factor converting them into the
+                # grid's units (edges without units need no conversion)
+                value = emitter.get_bin_edges(bin_axis)
+                unit_scales.append(
+                    get_attr_unit_conversion(value.units, units)
+                    if isinstance(value, unyt_array)
+                    else 1.0
+                )
+                bin_axes.append(emitter.bin_axes.index(bin_axis))
+                extracted.append(
+                    emitter.get_bin_edges(bin_axis, values_only=True)
+                )
+                continue
+
+            # Otherwise, get the attribute from the model or emitter
+            value = get_param(axis, model, None, emitter, preserve_units=True)
+
+            # Convert the units if necessary
+            if isinstance(value, (unyt_array, unyt_quantity)):
+                if log or units == "dimensionless":
+                    value = value.ndview
+                elif value.units == Unit(units):
+                    value = value.ndview
+                else:
+                    value = convert_in_place(value, units).ndview
+
+            # We need a single value to put all the mass at
+            value = np.atleast_1d(value)
+            if value.size != 1:
+                raise exceptions.InconsistentArguments(
+                    f"A {emitter.__class__.__name__} that isn't binned "
+                    f"along {axis} needs a single value for it, got "
+                    f"{value.size}."
+                )
+
+            # Get the input axis this grid axis takes, either the emitter's
+            # bin axis or the next of the weight variable's trailing axes
+            if bin_axis in emitter.bin_axes:
+                bin_axes.append(emitter.bin_axes.index(bin_axis))
+            else:
+                bin_axes.append(next_axis)
+                next_axis += 1
+
+            # Collapse every bin along this axis onto the value (the edges
+            # are linear and already in the grid's units)
+            extracted.append(
+                np.full(
+                    weight.shape[bin_axes[-1] + 1] + 1,
+                    10 ** value[0] if log else value[0],
+                    dtype=weight.dtype,
+                )
+            )
+            unit_scales.append(1.0)
+
+        # Check if the mass is outside the grid axes if necessary
+        if do_grid_check:
+            self.check_emitter_attrs(
+                emitter, extracted, weight, bin_axes, unit_scales
+            )
+
+        return tuple(extracted), weight, tuple(bin_axes), tuple(unit_scales)
+
+    def _get_emitter_weights(self, emitter, model, dtype=np.float64):
+        """Get the weights the grid is weighted by for the emitter.
+
+        These are the bin masses, with a trailing length 1 axis for each grid
+        axis the emitter isn't binned along. This is a view, so nothing is
+        copied.
+
+        Args:
+            emitter (Stars):
+                The parametric emitter object.
+            model (EmissionModel):
+                Unused, the weights are always the emitter's bin masses.
+            dtype (np.dtype):
+                Unused, the weights are always the emitter's bin masses.
+
+        Returns:
+            np.ndarray:
+                The weights, without units.
+        """
+        # Add a length 1 axis for each grid axis the emitter isn't binned
+        # along
+        nextra = max(self._grid_naxes - len(emitter.bin_axes), 0)
+        return emitter.bin_masses.reshape(
+            emitter.bin_masses.shape + (1,) * nextra
+        )
+
+    def _select_populations(self, weight, mask):
+        """Apply the population level part of a mask to the weights.
+
+        A mask with a range per population (see parametric.Stars.get_mask)
+        excludes whole populations by emptying their ranges, while the
+        populations it includes all share the same ranges. The extension
+        takes a single set of ranges, so here we drop the excluded
+        populations from the weights and return the shared ranges.
+
+        Args:
+            weight (np.ndarray):
+                The extracted weight variable (the bin masses), with one
+                row per population.
+            mask (np.ndarray of float):
+                The allowed range along each bin axis, with shape
+                (nbin_axes, 2) or (npop, nbin_axes, 2), or None.
+
+        Returns:
+            tuple
+                The weights of the included populations, the (nbin_axes, 2)
+                ranges they share (or None) and which populations were
+                included (or None if they all were).
+        """
+        # Nothing to do without a range per population
+        if mask is None or mask.ndim == 2:
+            return weight, mask, None
+
+        # A population is excluded if its first range is empty
+        include = mask[:, 0, 0] <= mask[:, 0, 1]
+
+        # If every population is excluded any of the (empty) ranges will
+        # exclude everything
+        if not include.any():
+            return weight, mask[0], None
+
+        # Every included population shares the same ranges
+        ranges = mask[np.argmax(include)]
+        if include.all():
+            return weight, ranges, None
+
+        # ponytail: copies the included populations' masses (only when a
+        # mask excludes some of them), give the extension a range per
+        # population if this ever matters
+        return weight[include], ranges, include
+
+    @timed("ParametricExtractorBase.check_emitter_attrs")
+    def check_emitter_attrs(
+        self,
+        emitter,
+        extracted_attrs,
+        weight,
+        bin_axes,
+        unit_scales,
+    ):
+        """Compute the fraction of the emitter's mass outside the grid axes.
+
+        This is by default not run but can be invoked via the do_grid_check
+        argument in the generate_lnu and generate_line methods.
+
+        Args:
+            emitter (Stars):
+                The emitter from which the attributes were extracted.
+            extracted_attrs (tuple):
+                The extracted bin edges along each grid axis.
+            weight (np.ndarray):
+                The extracted weight variable (the bin masses).
+            bin_axes (tuple):
+                The bin axis matching each grid axis.
+            unit_scales (tuple):
+                The factor converting each grid axis' edges into its units.
+        """
+        # Loop over the extracted edges and flag the bins reaching outside
+        # the grid axes, we'll do this by updating a mask over the bins
+        outside = np.zeros(weight.shape[1:], dtype=bool)
+        for edges, axis, iaxis, scale, log in zip(
+            extracted_attrs,
+            self._grid_axes,
+            bin_axes,
+            unit_scales,
+            self._log_emitter_attr,
+        ):
+            # Get the grid axis' range in the edges' (linear) units
+            lo, hi = axis.min(), axis.max()
+            if log:
+                lo, hi = 10**lo, 10**hi
+            lo, hi = lo / scale, hi / scale
+
+            # Flag the bins along this axis reaching outside the range
+            shape = [1] * outside.ndim
+            shape[iaxis] = edges.size - 1
+            outside |= ((edges[:-1] < lo) | (edges[1:] > hi)).reshape(shape)
+
+        # Compute the fraction of the mass outside the grid axes
+        total = np.sum(weight)
+        frac_outside = np.sum(weight[:, outside]) / total if total > 0 else 0
+
+        # Warn the user if the fraction is greater than 0.0
+        if frac_outside > 0.0:
+            warn(
+                f"Found a {emitter.__class__.__name__} with "
+                f"{frac_outside * 100:.2f}% of its mass outside the grid "
+                "axes.",
+            )
+
+
+class IntegratedParametricExtractor(ParametricExtractorBase):
     """A class to extract the integrated parametric emission from a grid.
 
     This Extractor will produce integrated emission from parametric based
@@ -1408,42 +1770,6 @@ class IntegratedParametricExtractor(Extractor):
     The grid weights for each grid and mask are stored on the emitter and
     reused, e.g. by the several extractions sharing a mask in a model.
     """
-
-    def _get_weights_key(self, mask):
-        """Get the key the grid weights for a mask are stored under.
-
-        Args:
-            mask (BinMask):
-                The mask applied to the bins, or None.
-
-        Returns:
-            tuple:
-                The key for the emitter's stored grid weights.
-        """
-        return (
-            self._grid.grid_name,
-            None if mask is None else mask.get_key(),
-        )
-
-    def _get_population_inputs(self, emitter, mask):
-        """Get the bins of a parametric emitter in the grid's axes.
-
-        Args:
-            emitter (Stars):
-                The parametric emitter.
-            mask (BinMask):
-                A mask to apply to the bins, or None.
-
-        Returns:
-            tuple:
-                The bin edges along each grid axis (in the grid's units), the
-                (masked) bin masses and the log10 flag for each grid axis.
-        """
-        # The emission is integrated over the populations, which share their
-        # edges, so we can sum them before spreading them onto the grid
-        return emitter.get_bins_for_grid(
-            self._grid, mask=mask, combine_populations=True
-        )
 
     @timed("IntegratedParametricExtractor.generate_lnu")
     @verify_out_precision()
@@ -1465,8 +1791,9 @@ class IntegratedParametricExtractor(Extractor):
                 The emitter object from which to extract the emission.
             model (EmissionModel):
                 The emission model defining the emission to extract.
-            mask (BinMask):
-                A mask to apply to the bins.
+            mask (np.ndarray of float):
+                The allowed range along each bin axis (see
+                parametric.Stars.get_mask), or None.
             lam_mask (np.ndarray of bool):
                 A mask to apply to the spectra's wavelength axis.
             grid_assignment_method (str):
@@ -1476,46 +1803,63 @@ class IntegratedParametricExtractor(Extractor):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
             do_grid_check (bool):
-                Unused, mass outside the grid is clamped onto its edges.
+                Whether to check how much of the mass lies outside the grid.
+                This is a sanity check that can be used to check the
+                consistency of your populations with the grid. It is False
+                by default.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned spectra arrays.
 
         Returns:
             Sed: The integrated spectra.
         """
+        # Resolve the requested output precision
         out_dtype = resolve_out_dtype(out_dtype)
 
-        # Reuse stored grid weights for this grid and mask if we have them
-        weights_key = self._get_weights_key(mask)
-        grid_weights = emitter._grid_weights.get(weights_key)
-
-        # Get the bins in the grid's axes (the mask is only needed if we
-        # have to compute the weights)
-        edges, masses, log_flags = self._get_population_inputs(
-            emitter, mask if grid_weights is None else None
+        # Get the attributes and weights from the emitter
+        extracted, weight, bin_axes, unit_scales = self.get_emitter_attrs(
+            emitter, model, do_grid_check
         )
+
+        # Drop any populations the mask excludes, leaving the ranges along
+        # the bin axes for the extension to apply
+        weight, mask, _ = self._select_populations(weight, mask)
 
         # If nthreads is -1 then use all available threads
         if nthreads == -1:
             nthreads = os.cpu_count()
 
+        # Get the grid_weights if they exist and can be reused
+        if self._can_cache_grid_weights(model, mask):
+            grid_weights = emitter._grid_weights.get("bic", {}).get(
+                self._grid.grid_name, None
+            )
+        else:
+            grid_weights = None
+
         # Compute the integrated lnu array
         spec, grid_weights = compute_integrated_parametric_sed(
             self._spectra_grid,
             self._grid_axes,
-            edges,
-            masses,
-            log_flags,
+            extracted,
+            weight,
+            self._log_emitter_attr,
+            bin_axes,
+            unit_scales,
             nthreads,
             grid_weights,
-            None,
+            mask,
             lam_mask,
             out_dtype,
             self._emitter_attributes,
         )
 
-        # Store the grid weights for reuse
-        emitter._grid_weights[weights_key] = grid_weights
+        # If the grid weights can be reused then lets store them in case
+        # we can make use of them later
+        if self._can_cache_grid_weights(model, mask):
+            emitter._grid_weights.setdefault("bic", {})[
+                self._grid.grid_name
+            ] = grid_weights
 
         return Sed(
             model.lam,
@@ -1542,8 +1886,9 @@ class IntegratedParametricExtractor(Extractor):
                 The emitter object from which to extract the emission.
             model (EmissionModel):
                 The emission model defining the emission to extract.
-            mask (BinMask):
-                A mask to apply to the bins.
+            mask (np.ndarray of float):
+                The allowed range along each bin axis (see
+                parametric.Stars.get_mask), or None.
             lam_mask (np.ndarray of bool):
                 A mask to apply to the lines.
             grid_assignment_method (str):
@@ -1553,37 +1898,53 @@ class IntegratedParametricExtractor(Extractor):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
             do_grid_check (bool):
-                Unused, mass outside the grid is clamped onto its edges.
+                Whether to check how much of the mass lies outside the grid.
+                This is a sanity check that can be used to check the
+                consistency of your populations with the grid. It is False
+                by default.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned line arrays.
+
+        Returns:
+            LineCollection: The integrated line luminosities and continua.
         """
+        # Resolve the requested output precision
         out_dtype = resolve_out_dtype(out_dtype)
 
-        # Reuse stored grid weights for this grid and mask if we have them
-        weights_key = self._get_weights_key(mask)
-        grid_weights = emitter._grid_weights.get(weights_key)
-
-        # Get the bins in the grid's axes (the mask is only needed if we
-        # have to compute the weights)
-        edges, masses, log_flags = self._get_population_inputs(
-            emitter, mask if grid_weights is None else None
+        # Get the attributes and weights from the emitter
+        extracted, weight, bin_axes, unit_scales = self.get_emitter_attrs(
+            emitter, model, do_grid_check
         )
+
+        # Drop any populations the mask excludes, leaving the ranges along
+        # the bin axes for the extension to apply
+        weight, mask, _ = self._select_populations(weight, mask)
 
         # If nthreads is -1 then use all available threads
         if nthreads == -1:
             nthreads = os.cpu_count()
 
+        # Get the grid_weights if they exist and can be reused
+        if self._can_cache_grid_weights(model, mask):
+            grid_weights = emitter._grid_weights.get("bic", {}).get(
+                self._grid.grid_name, None
+            )
+        else:
+            grid_weights = None
+
         # Compute the integrated line luminosities, then reuse the weights
-        # for the continuum
+        # for the continuum (they already include any mask)
         lum, grid_weights = compute_integrated_parametric_sed(
             self._line_lum_grid,
             self._grid_axes,
-            edges,
-            masses,
-            log_flags,
+            extracted,
+            weight,
+            self._log_emitter_attr,
+            bin_axes,
+            unit_scales,
             nthreads,
             grid_weights,
-            None,
+            mask,
             lam_mask,
             out_dtype,
             self._emitter_attributes,
@@ -1591,9 +1952,11 @@ class IntegratedParametricExtractor(Extractor):
         cont, _ = compute_integrated_parametric_sed(
             self._line_cont_grid,
             self._grid_axes,
-            edges,
-            masses,
-            log_flags,
+            extracted,
+            weight,
+            self._log_emitter_attr,
+            bin_axes,
+            unit_scales,
             nthreads,
             grid_weights,
             None,
@@ -1602,8 +1965,12 @@ class IntegratedParametricExtractor(Extractor):
             self._emitter_attributes,
         )
 
-        # Store the grid weights for reuse
-        emitter._grid_weights[weights_key] = grid_weights
+        # If the grid weights can be reused then lets store them in case
+        # we can make use of them later
+        if self._can_cache_grid_weights(model, mask):
+            emitter._grid_weights.setdefault("bic", {})[
+                self._grid.grid_name
+            ] = grid_weights
 
         return LineCollection(
             line_ids=self._grid.line_ids,
@@ -1629,24 +1996,38 @@ class PopulationExtractor(IntegratedParametricExtractor):
     """
 
     def _get_population_spectra(
-        self, emitter, mask, grid, lam_mask, nthreads, out_dtype
+        self,
+        emitter,
+        model,
+        mask,
+        grid,
+        lam_mask,
+        nthreads,
+        do_grid_check,
+        out_dtype,
     ):
         """Get the emission of each population from a grid.
 
         The per population grid weights are stored on the emitter (keyed by
-        grid and mask) and reused by later extractions.
+        grid) and reused by later extractions, unless they are specific to
+        this extraction (see _can_cache_grid_weights).
 
         Args:
             emitter (Stars):
                 The parametric emitter.
-            mask (BinMask):
-                A mask to apply to the bins, or None.
+            model (EmissionModel):
+                The emission model defining the emission to extract.
+            mask (np.ndarray of float):
+                The allowed range along each bin axis (see
+                parametric.Stars.get_mask), or None.
             grid (np.ndarray):
                 The grid to extract (spectra or line luminosities).
             lam_mask (np.ndarray of bool):
                 A mask to apply to the grid's last axis.
             nthreads (int):
                 The number of threads to use.
+            do_grid_check (bool):
+                Whether to check how much of the mass lies outside the grid.
             out_dtype (np.dtype):
                 Requested floating-point dtype for the result.
 
@@ -1654,25 +2035,54 @@ class PopulationExtractor(IntegratedParametricExtractor):
             np.ndarray:
                 The (npop, nlam) emission of each population.
         """
-        weights_key = ("populations", *self._get_weights_key(mask))
-        pop_weights = emitter._grid_weights.get(weights_key)
-        edges, masses, log_flags = emitter.get_bins_for_grid(
-            self._grid, mask=mask if pop_weights is None else None
+        # Get the attributes and weights from the emitter
+        extracted, weight, bin_axes, unit_scales = self.get_emitter_attrs(
+            emitter, model, do_grid_check
         )
+
+        # Get the grid weights if they exist and can be reused
+        can_cache = self._can_cache_grid_weights(model, mask)
+        if can_cache:
+            pop_weights = emitter._grid_weights.get("bic_populations", {}).get(
+                self._grid.grid_name, None
+            )
+        else:
+            pop_weights = None
+
+        # Drop any populations the mask excludes, leaving the ranges along
+        # the bin axes for the extension to apply
+        weight, mask, include = self._select_populations(weight, mask)
+
+        # Compute the emission of each population
         spec, pop_weights = compute_population_seds(
             grid,
             self._grid_axes,
-            edges,
-            masses,
-            log_flags,
+            extracted,
+            weight,
+            self._log_emitter_attr,
+            bin_axes,
+            unit_scales,
             nthreads,
             pop_weights,
-            None,
+            mask,
             lam_mask,
             out_dtype,
             self._emitter_attributes,
         )
-        emitter._grid_weights[weights_key] = pop_weights
+
+        # If the grid weights can be reused then lets store them in case
+        # we can make use of them later
+        if can_cache:
+            emitter._grid_weights.setdefault("bic_populations", {})[
+                self._grid.grid_name
+            ] = pop_weights
+
+        # Excluded populations don't emit anything
+        if include is not None:
+            full_spec = np.zeros((include.size, spec.shape[1]), spec.dtype)
+            full_spec[include] = spec
+            spec = full_spec
+
         return spec
 
     @timed("PopulationExtractor.generate_lnu")
@@ -1694,8 +2104,9 @@ class PopulationExtractor(IntegratedParametricExtractor):
                 The emitter object from which to extract the emission.
             model (EmissionModel):
                 The emission model defining the emission to extract.
-            mask (BinMask):
-                A mask to apply to the bins.
+            mask (np.ndarray of float):
+                The allowed range along each bin axis (see
+                parametric.Stars.get_mask), or None.
             lam_mask (np.ndarray of bool):
                 A mask to apply to the spectra's wavelength axis.
             grid_assignment_method (str):
@@ -1705,7 +2116,10 @@ class PopulationExtractor(IntegratedParametricExtractor):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
             do_grid_check (bool):
-                Unused, mass outside the grid is clamped onto its edges.
+                Whether to check how much of the mass lies outside the grid.
+                This is a sanity check that can be used to check the
+                consistency of your populations with the grid. It is False
+                by default.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned spectra arrays.
 
@@ -1739,7 +2153,14 @@ class PopulationExtractor(IntegratedParametricExtractor):
         # Otherwise the integrated emission is the sum of the populations',
         # which is far cheaper than reading the grid again
         spec = self._get_population_spectra(
-            emitter, mask, self._spectra_grid, lam_mask, nthreads, out_dtype
+            emitter,
+            model,
+            mask,
+            self._spectra_grid,
+            lam_mask,
+            nthreads,
+            do_grid_check,
+            out_dtype,
         )
         return (
             Sed(
@@ -1773,8 +2194,9 @@ class PopulationExtractor(IntegratedParametricExtractor):
                 The emitter object from which to extract the emission.
             model (EmissionModel):
                 The emission model defining the emission to extract.
-            mask (BinMask):
-                A mask to apply to the bins.
+            mask (np.ndarray of float):
+                The allowed range along each bin axis (see
+                parametric.Stars.get_mask), or None.
             lam_mask (np.ndarray of bool):
                 A mask to apply to the lines.
             grid_assignment_method (str):
@@ -1784,7 +2206,10 @@ class PopulationExtractor(IntegratedParametricExtractor):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
             do_grid_check (bool):
-                Unused, mass outside the grid is clamped onto its edges.
+                Whether to check how much of the mass lies outside the grid.
+                This is a sanity check that can be used to check the
+                consistency of your populations with the grid. It is False
+                by default.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned line arrays.
 
@@ -1822,10 +2247,24 @@ class PopulationExtractor(IntegratedParametricExtractor):
 
         # Otherwise the integrated lines are the sum of the populations'
         lum = self._get_population_spectra(
-            emitter, mask, self._line_lum_grid, lam_mask, nthreads, out_dtype
+            emitter,
+            model,
+            mask,
+            self._line_lum_grid,
+            lam_mask,
+            nthreads,
+            do_grid_check,
+            out_dtype,
         )
         cont = self._get_population_spectra(
-            emitter, mask, self._line_cont_grid, lam_mask, nthreads, out_dtype
+            emitter,
+            model,
+            mask,
+            self._line_cont_grid,
+            lam_mask,
+            nthreads,
+            do_grid_check,
+            out_dtype,
         )
         lum = lum * self._line_lum_grid.units
         cont = cont * self._line_cont_grid.units

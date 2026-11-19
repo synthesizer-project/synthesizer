@@ -71,3 +71,159 @@ def test_A24_sigmoid_params(lam):
     assert isinstance(transmission, np.ndarray)
     assert np.all(transmission <= 1.0)
     assert np.all(transmission >= 0.0)
+
+
+def test_igm_params_from_emitter(i14, lam):
+    """Parameters on the emitter take precedence over the IGM's own."""
+    from types import SimpleNamespace
+
+    from synthesizer.emission_models.attenuation import Inoue14
+
+    # The emitter's value should be used instead of the default
+    emitter = SimpleNamespace(scale_tau=2.0)
+    np.testing.assert_allclose(
+        i14.get_transmission(3.0, lam, emitter=emitter),
+        Inoue14(scale_tau=2.0).get_transmission(3.0, lam),
+    )
+
+    # A string value names the attribute to use on the emitter
+    alias = Inoue14(scale_tau="igm_scale_tau")
+    emitter = SimpleNamespace(igm_scale_tau=2.0)
+    np.testing.assert_allclose(
+        alias.get_transmission(3.0, lam, emitter=emitter),
+        Inoue14(scale_tau=2.0).get_transmission(3.0, lam),
+    )
+
+
+def test_A24_params_from_emitter(a24, lam):
+    """Asada25 reads all of its parameters from the emitter."""
+    from types import SimpleNamespace
+
+    from synthesizer.emission_models.attenuation import Asada25
+
+    params = {
+        "sigmoid_params": (4.0, 2.0, 19.0),
+        "scale_tau": 0.5,
+        "add_cgm": False,
+    }
+    np.testing.assert_allclose(
+        a24.get_transmission(7.0, lam, emitter=SimpleNamespace(**params)),
+        Asada25(**params).get_transmission(7.0, lam),
+    )
+
+
+def test_igm_transform_uses_emitter_params(lam):
+    """Applying an IGM via _transform uses the emitter's parameters."""
+    from types import SimpleNamespace
+
+    from astropy.cosmology import Planck18
+    from unyt import Hz, erg, s
+
+    from synthesizer.emission_models.attenuation import Inoue14
+    from synthesizer.emissions import Sed
+
+    # The IGM needs the observed wavelengths and redshift on the Sed
+    sed = Sed(lam=lam, lnu=np.ones(len(lam)) * erg / s / Hz)
+    sed.get_fnu(Planck18, 3.0)
+
+    emitter = SimpleNamespace(scale_tau=2.0, model_param_cache={})
+    model = SimpleNamespace(fixed_parameters={}, label="igm")
+    out = Inoue14()._transform(sed, emitter, model)
+
+    np.testing.assert_allclose(
+        out.lnu.value,
+        Inoue14(scale_tau=2.0).get_transmission(3.0, sed.obslam),
+    )
+
+
+def test_igm_transform_parameter_precedence(lam):
+    """Model and emission parameters override emitter and IGM defaults."""
+    from types import SimpleNamespace
+
+    from astropy.cosmology import Planck18
+    from unyt import Hz, erg, s
+
+    from synthesizer.emission_models.attenuation import Inoue14
+    from synthesizer.emissions import Sed
+
+    sed = Sed(lam=lam, lnu=np.ones(len(lam)) * erg / s / Hz)
+    sed.get_fnu(Planck18, 3.0)
+    sed.scale_tau = 3.0
+    emitter = SimpleNamespace(scale_tau=4.0, model_param_cache={})
+    model = SimpleNamespace(fixed_parameters={"scale_tau": 2.0}, label="igm")
+    igm = Inoue14(scale_tau=5.0)
+
+    for expected in (2.0, 3.0, 4.0, 5.0):
+        out = igm._transform(sed, emitter, model)
+        np.testing.assert_allclose(
+            out.lnu.value,
+            Inoue14(scale_tau=expected).get_transmission(3.0, sed.obslam),
+        )
+        if expected == 2.0:
+            model.fixed_parameters.clear()
+        elif expected == 3.0:
+            del sed.scale_tau
+        elif expected == 4.0:
+            del emitter.scale_tau
+
+
+def test_igm_equality():
+    """IGMs compare by type and transmission-defining parameters."""
+    from synthesizer.emission_models.attenuation import (
+        Asada25,
+        Inoue14,
+        Madau96,
+    )
+
+    assert Inoue14() == Inoue14()
+    assert Inoue14(scale_tau=2) != Inoue14()
+    assert Inoue14() != Asada25()
+    assert Asada25() == Asada25()
+    assert Asada25(sigmoid_params=(1, 2, 3)) != Asada25()
+    assert Madau96() == Madau96()
+    modified = Madau96()
+    modified.coefficients[0] *= 2
+    assert Madau96() != modified
+
+
+def test_igm_transmission_cache(lam):
+    """The transmission is reused only for matching inputs."""
+    from types import SimpleNamespace
+
+    from synthesizer.emission_models.attenuation import (
+        Asada25,
+        Inoue14,
+        Madau96,
+    )
+
+    for igm in (Inoue14(), Madau96(), Asada25()):
+        # Matching inputs return the same read-only array
+        first = igm.get_transmission(7.0, lam)
+        assert igm.get_transmission(7.0, lam.copy()) is first
+        assert not first.flags.writeable
+
+        # An equal IGM (e.g. passing the class to get_fnu) shares the cache
+        assert type(igm)().get_transmission(7.0, lam) is first
+
+        # A different redshift or wavelength array is recomputed
+        params = igm._get_igm_params(None)
+        other_z = igm.get_transmission(6.0, lam)
+        assert other_z is not first
+        np.testing.assert_array_equal(
+            other_z, igm._compute_transmission(6.0, lam, params)
+        )
+        other_lam = igm.get_transmission(6.0, lam[::2])
+        np.testing.assert_array_equal(
+            other_lam, igm._compute_transmission(6.0, lam[::2], params)
+        )
+
+    # A different parameter on the emitter is recomputed
+    igm = Inoue14()
+    default = igm.get_transmission(3.0, lam)
+    scaled = igm.get_transmission(
+        3.0, lam, emitter=SimpleNamespace(scale_tau=2.0)
+    )
+    assert scaled is not default
+    np.testing.assert_allclose(
+        scaled, Inoue14(scale_tau=2.0).get_transmission(3.0, lam)
+    )

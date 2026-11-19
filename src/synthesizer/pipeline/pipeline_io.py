@@ -15,6 +15,7 @@ Example usage:
 
 import os
 import time
+from contextlib import contextmanager
 
 import h5py
 import numpy as np
@@ -28,6 +29,41 @@ from synthesizer.pipeline.pipeline_utils import (
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.operation_timers import timed
+
+# These live under Galaxies alongside the outputs, but describe the whole
+# run rather than one row per galaxy. Rank 0 writes them once.
+_SHARED_AXIS_GROUPS = (
+    "/Galaxies/Stars/SFZHAxes",
+    "/Galaxies/Stars/SFHAxes",
+)
+
+
+@contextmanager
+def _hdf5_replaced_on_success(path):
+    """Open an HDF5 file for writing which only replaces path on success.
+
+    The file is written to a temporary path next to path, so a failure while
+    writing leaves any existing file at path untouched, rather than an
+    incomplete file which looks valid.
+
+    Args:
+        path (str): The path the file should end up at.
+
+    Yields:
+        h5py.File: The open file to write to.
+    """
+    temp_path = f"{path}.tmp"
+    try:
+        with h5py.File(temp_path, "w") as hdf:
+            yield hdf
+
+        # Everything was written (and the file closed), so swap it in
+        os.replace(temp_path, path)
+    except BaseException:
+        # Clean up the incomplete file before re-raising
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise
 
 
 class PipelineIO:
@@ -288,6 +324,13 @@ class PipelineIO:
 
                 self._took(start, "Writing metadata")
 
+        # The other ranks only hold galaxy outputs. Start each file afresh
+        # here too, including the Galaxies group: a rank with no galaxies
+        # will never create it through write_data, but combine_files needs it.
+        elif self.is_parallel and not self.is_collective:
+            with h5py.File(self.filepath, "w") as hdf:
+                hdf.create_group("Galaxies")
+
         if self.is_parallel:
             self.comm.Barrier()
 
@@ -440,8 +483,12 @@ class PipelineIO:
             if self.is_parallel:
                 data = unify_dict_structure_across_ranks(data, self.comm)
 
-            # Early exit if data is empty
-            if data is None or len(data) == 0:
+            # Early exit if data is empty. Zero-row per-galaxy arrays are
+            # still written so empty ranks hold the dataset with the right
+            # trailing shape.
+            if data is None or (
+                len(data) == 0 and (isinstance(data, dict) or indexes is None)
+            ):
                 return
 
             # Root-level metadata should only be written once, even when using
@@ -470,7 +517,7 @@ class PipelineIO:
             self._took(start, f"Writing {key} (and subgroups)")
 
         except Exception as e:
-            self._print(f"Failed to write {key} - {e}")
+            raise OSError(f"Failed to write {key} - {e}") from e
 
     @timed("PipelineIO.combine_rank_files")
     def combine_rank_files(self):
@@ -499,6 +546,13 @@ class PipelineIO:
                 # in the destination file if it doesn't exist. We also need to
                 # copy the attributes.
                 if isinstance(v, h5py.Group):
+                    # Bin axes have no galaxy dimension. Copy their group
+                    # once instead of slicing each dataset by rank.
+                    if v.name in _SHARED_AXIS_GROUPS:
+                        if k not in dest:
+                            src.file.copy(v, dest, name=k)
+                        continue
+
                     # Create the group if it doesn't exist
                     if k not in dest:
                         dest.create_group(k)
@@ -519,6 +573,16 @@ class PipelineIO:
                         dset.attrs[attr] = v.attrs[attr]
 
                 else:
+                    # Each rank must hold exactly one row per galaxy
+                    if v.shape[0] != slice.stop - slice.start:
+                        raise ValueError(
+                            f"Cannot combine {v.name}: {v.shape[0]} rows "
+                            f"for {slice.stop - slice.start} galaxies"
+                        )
+                    # Empty ranks only hold zero-row placeholders, which
+                    # must not decide the combined dataset's shape
+                    if v.shape[0] == 0:
+                        continue
                     # If the dataset doesn't exist we need to create it
                     if k not in dest:
                         dset = dest.create_dataset(
@@ -550,8 +614,9 @@ class PipelineIO:
         new_path = "_".join(path_no_ext.split("_")[:-1]) + f".{ext}"
         temp_path = "_".join(path_no_ext.split("_")[:-1]) + "_<rank>.hdf5"
 
-        # Open the output file
-        with h5py.File(new_path, "w") as hdf:
+        # Open the output file (any existing file is only replaced once the
+        # new one is complete)
+        with _hdf5_replaced_on_success(new_path) as hdf:
             # Loop over each rank file
             for rank in range(self.size):
                 # Open the rank file
@@ -604,42 +669,66 @@ class PipelineIO:
         temp_path = "_".join(path_no_ext.split("_")[:-1]) + "_<rank>.hdf5"
         new_path = "_".join(path_no_ext.split("_")[:-1]) + f".{ext}"
 
-        # Remove the old combined file if it exists
+        # Remove any old virtual file. Unlike a copied file it can't be kept
+        # if this combine fails, since it points at the rank files this run
+        # has already overwritten
         if os.path.exists(new_path):
             os.remove(new_path)
 
         # Open the first rank file (rank 0 file) to discover the structure
         first_file_path = temp_path.replace("<rank>", "0")
         with h5py.File(first_file_path, "r") as f0:
-            # Gather dataset information (for virtual datasets)
-            datasets_info = []
+            # Gather dataset information (for virtual datasets). A rank
+            # without galaxies may hold empty placeholders so we take each
+            # dataset's information from the first rank with rows for it
+            datasets_info = {}
 
             def gather_datasets(group, group_path="/"):
                 for k, v in group.items():
                     current_path = f"{group_path}{k}"
+                    # Axes are shared metadata, not virtual galaxy rows.
+                    # We'll copy them directly from rank 0 below.
+                    if current_path in _SHARED_AXIS_GROUPS:
+                        continue
                     if isinstance(v, h5py.Group):
                         gather_datasets(v, current_path + "/")
-                    else:
-                        # Record dataset path, shape, dtype, and attributes
-                        datasets_info.append(
-                            (current_path, v.shape, v.dtype, dict(v.attrs))
+                    elif current_path not in datasets_info or (
+                        datasets_info[current_path][0][0] == 0
+                        and v.shape[0] > 0
+                    ):
+                        # Record dataset shape, dtype, and attributes
+                        datasets_info[current_path] = (
+                            v.shape,
+                            v.dtype,
+                            dict(v.attrs),
                         )
 
             # Gather group structure (to replicate in the virtual file)
-            groups_info = []
+            groups_info = {}
 
             def gather_groups(group, group_path="/"):
                 for k, v in group.items():
                     current_path = f"{group_path}{k}"
+                    if current_path in _SHARED_AXIS_GROUPS:
+                        continue
                     if isinstance(v, h5py.Group):
-                        groups_info.append((current_path, dict(v.attrs)))
+                        groups_info.setdefault(current_path, dict(v.attrs))
                         gather_groups(v, current_path + "/")
 
             gather_datasets(f0["Galaxies"], "/Galaxies/")
             gather_groups(f0["Galaxies"], "/Galaxies/")
 
-            # Create the virtual file
-            with h5py.File(new_path, "w") as hdf:
+            # A rank without galaxies may be missing datasets entirely, so
+            # also gather the structure from the other rank files
+            for rank in range(1, self.size):
+                src_file = temp_path.replace("<rank>", str(rank))
+                with h5py.File(src_file, "r") as rank_f:
+                    gather_datasets(rank_f["Galaxies"], "/Galaxies/")
+                    gather_groups(rank_f["Galaxies"], "/Galaxies/")
+
+            # Create the virtual file (any existing file is only replaced
+            # once the new one is complete)
+            with _hdf5_replaced_on_success(new_path) as hdf:
                 for attr in f0.attrs:
                     hdf.attrs[attr] = f0.attrs[attr]
 
@@ -651,28 +740,51 @@ class PipelineIO:
                 hdf.create_group("Galaxies")
 
                 # Create empty group structure
-                for gpath, gattrs in groups_info:
+                for gpath, gattrs in groups_info.items():
                     grp = hdf.create_group(gpath)
                     for attr_name, attr_val in gattrs.items():
                         grp.attrs[attr_name] = attr_val
 
+                # Preserve the axes at their usual paths without interpreting
+                # their lengths as a number of galaxies. Only rank 0 writes
+                # them, so it is also the source of truth here.
+                for path in _SHARED_AXIS_GROUPS:
+                    if path in f0:
+                        hdf.require_group("Galaxies/Stars")
+                        f0.copy(path, hdf, name=path)
+
                 # Construct the virtual datasets for each dataset
-                for dpath, shape, dtype, dattrs in datasets_info:
+                for dpath, (shape, dtype, dattrs) in datasets_info.items():
                     final_shape = (self.num_galaxies,) + shape[1:]
                     layout = h5py.VirtualLayout(shape=final_shape, dtype=dtype)
 
-                    # Loop over each rank and map the data to the layout
+                    # Loop over each rank and map the data to the layout,
+                    # keeping track of whether any rank had rows to map
+                    mapped = False
                     for rank, (start_i, end_i) in enumerate(zip(starts, ends)):
                         src_file = temp_path.replace("<rank>", str(rank))
                         with h5py.File(src_file, "r") as rank_f:
+                            # Nothing to map from a rank without this dataset
+                            if dpath not in rank_f:
+                                continue
+
                             src_dset = rank_f[dpath]
                             src_shape = src_dset.shape
+                            src_units = src_dset.attrs.get("Units")
                             local_size = src_dset.shape[0]
+
+                        # Nothing to map from a rank without any rows
+                        if local_size == 0:
+                            continue
 
                         # Ensure the local size is as expected
                         expected_size = end_i - start_i
                         if local_size != expected_size:
-                            end_i = start_i + local_size
+                            raise ValueError(
+                                f"Cannot map {dpath}: rank {rank} has "
+                                f"{local_size} rows for {expected_size} "
+                                "galaxies"
+                            )
 
                         target_shape = (end_i - start_i,) + shape[1:]
 
@@ -684,9 +796,19 @@ class PipelineIO:
                                 "Cannot create virtual dataset mapping for "
                                 f"{dpath!r}: rank {rank} dataset in "
                                 f"{src_file!r} "
-                                f"has shape {src_shape}, but rank 0 defined "
+                                f"has shape {src_shape}, but other ranks have "
                                 f"shape {shape}. Non-leading dimensions must "
                                 "match across rank files."
+                            )
+
+                        # The units must also match, we don't convert them
+                        if src_units != dattrs.get("Units"):
+                            raise ValueError(
+                                "Cannot create virtual dataset mapping for "
+                                f"{dpath!r}: rank {rank} dataset in "
+                                f"{src_file!r} has units {src_units!r}, but "
+                                f"other ranks have units "
+                                f"{dattrs.get('Units')!r}."
                             )
 
                         # Create a virtual source for this rank
@@ -707,6 +829,12 @@ class PipelineIO:
                                 f"shape {target_shape}, final virtual shape "
                                 f"{final_shape}. Original error: {exc}"
                             ) from exc
+                        mapped = True
+
+                    # Skip datasets without rows on any rank, otherwise we'd
+                    # make a dataset full of fill values
+                    if not mapped:
+                        continue
 
                     # Create the virtual dataset in the final file
                     vds = hdf.create_virtual_dataset(dpath, layout)

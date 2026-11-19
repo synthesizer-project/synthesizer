@@ -28,8 +28,37 @@ from synthesizer.imaging.image_generators import (
     _validate_centered_coordinates,
 )
 from synthesizer.kernel_functions import Kernel
-from synthesizer.units import unit_is_compatible
+from synthesizer.units import convert_in_place, unit_is_compatible
 from synthesizer.utils.operation_timers import timed, timer
+
+# The Sed quantities defined in the observer frame. Data cubes of these are
+# resampled onto the IFU wavelengths in the observer frame, all others in the
+# rest frame.
+_OBSERVER_FRAME_QUANTITIES = ("fnu", "flux", "flam")
+
+
+def _resample_sed_onto_ifu(sed, ifu, quantity):
+    """Resample an Sed onto the IFU wavelengths in the quantity's frame.
+
+    Observer frame quantities (fnu, flux, flam) treat the IFU wavelengths as
+    observer frame wavelengths, so the fluxes land exactly on them. All other
+    quantities treat the IFU wavelengths as rest frame wavelengths.
+
+    Args:
+        sed (Sed):
+            The Sed to resample.
+        ifu (SpectralCube):
+            The spectral cube whose wavelengths to resample onto.
+        quantity (str):
+            The Sed quantity the data cube will hold.
+
+    Returns:
+        Sed:
+            The resampled Sed.
+    """
+    if quantity in _OBSERVER_FRAME_QUANTITIES:
+        return sed.get_resampled_observed_sed(ifu.lam)
+    return sed.get_resampled_sed(new_lam=ifu.lam)
 
 
 def _combine_spectral_cubes(cubes, label, model_cache):
@@ -114,7 +143,7 @@ def _generate_ifu_particle_hist(
     """
     with timer("_generate_ifu_particle_hist.setup"):
         # Sample the spectra onto the wavelength grid
-        sed = sed.get_resampled_sed(new_lam=ifu.lam)
+        sed = _resample_sed_onto_ifu(sed, ifu, quantity)
 
         # Store the Sed and quantity
         ifu.sed = sed
@@ -171,7 +200,7 @@ def _generate_ifu_particle_hist(
 
         # Convert coordinates and smoothing lengths to the correct units and
         # strip them off
-        _coords = cent_coords.to(spatial_units).value
+        _coords = cent_coords.to(spatial_units).ndview
 
         # Ensure coordinates have been centred
         _validate_centered_coordinates(cent_coords, warn_only=True)
@@ -248,7 +277,7 @@ def _generate_ifu_particle_smoothed(
     """
     with timer("_generate_ifu_particle_smoothed.setup"):
         # Sample the spectra onto the wavelength grid
-        sed = sed.get_resampled_sed(new_lam=ifu.lam)
+        sed = _resample_sed_onto_ifu(sed, ifu, quantity)
 
         # Store the Sed and quantity
         ifu.sed = sed
@@ -335,7 +364,9 @@ def _generate_ifu_particle_smoothed(
     # Generate the smoothed IFU from the prepared particle inputs
     ifu.arr = make_img(
         spectra,
-        np.ascontiguousarray(smoothing_lengths.to_value(spatial_units)),
+        np.ascontiguousarray(
+            convert_in_place(smoothing_lengths, spatial_units).ndview
+        ),
         np.ascontiguousarray(_coords),
         kernel_arr,
         res,
@@ -374,7 +405,7 @@ def _generate_ifu_parametric_smoothed(
             The density grid to be smoothed over.
     """
     # Sample the spectra onto the wavelength grid if we need to
-    sed = sed.get_resampled_sed(new_lam=ifu.lam)
+    sed = _resample_sed_onto_ifu(sed, ifu, quantity)
 
     # Store the Sed and quantity
     ifu.sed = sed
