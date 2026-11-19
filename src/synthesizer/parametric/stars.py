@@ -756,7 +756,11 @@ class Stars(StarsComponent):
             Stars:
                 New Stars object on the requested grid.
         """
-        return self._from_bins(*self._get_bins_at_earlier_time(age_offset))
+        return self._from_bins(
+            *self._get_bins_at_earlier_time(age_offset),
+            names=self.population_names,
+            **self._get_population_params(),
+        )
 
     def _set_bins(self, edges, masses):
         """Set the bins describing this population.
@@ -929,8 +933,28 @@ class Stars(StarsComponent):
             tuple(grid._extract_axes),
         )
 
+    def _get_population_params(self):
+        """Get the parameters and morphology describing the populations.
+
+        Returns:
+            dict:
+                The arguments giving a new Stars the same parameters and
+                morphology as this one.
+        """
+        params = {
+            name: getattr(self, name, None) for name in self._parameter_names
+        }
+        params["morphology"] = self.morphology
+        return params
+
     def _from_bins(
-        self, edges, masses, log10ages=None, metallicities=None, **kwargs
+        self,
+        edges,
+        masses,
+        log10ages=None,
+        metallicities=None,
+        names=None,
+        **kwargs,
     ):
         """Make a new Stars holding the given bins.
 
@@ -943,6 +967,8 @@ class Stars(StarsComponent):
                 The log10 age axis, defaults to this object's.
             metallicities (np.ndarray of float):
                 The metallicity axis, defaults to this object's.
+            names (list of str):
+                A name for each population, or None.
             **kwargs (dict):
                 Any other arguments for the new Stars.
 
@@ -962,6 +988,7 @@ class Stars(StarsComponent):
         )
         new._set_bins(edges, masses)
         new.initial_mass = np.sum(masses) * Msun
+        new.population_names = None if names is None else list(names)
         return new
 
     def get_population_photo_lnu(self, *args, **kwargs):
@@ -1565,29 +1592,49 @@ class Stars(StarsComponent):
             *[stars._parameter_names for stars in populations]
         )
         for name in sorted(common):
+            given = [getattr(stars, name) for stars in populations]
+
+            # A parameter no population has set stays unset
+            if all(value is None for value in given):
+                params[name] = None
+                continue
+
+            # One only some populations have set can't be combined
+            if any(value is None for value in given):
+                warn(
+                    f"Only some of the populations have {name}, the "
+                    "combined Stars won't have it."
+                )
+                continue
+
+            # Get one value per population, in the units of the first
+            units = getattr(given[0], "units", None)
             try:
                 values = np.concatenate(
                     [
                         np.broadcast_to(
-                            np.asarray(getattr(stars, name)), (stars.npop,)
+                            np.asarray(
+                                value if units is None else value.to(units)
+                            ),
+                            (stars.npop,),
                         )
-                        for stars in populations
+                        for stars, value in zip(populations, given)
                     ]
                 )
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, AttributeError):
                 warn(
                     f"Can't combine {name} into one value per population, "
                     "the combined Stars won't have it."
                 )
                 continue
-            params[name] = values[0] if np.all(values == values[0]) else values
+
+            # Keep a single value if the populations agree
+            if np.all(values == values[0]):
+                values = values[0]
+            params[name] = values if units is None else values * units
 
         # Combine the morphologies
         params["morphology"] = cls._combine_morphologies(populations)
-
-        combined = first._from_bins(
-            edges, np.concatenate(all_masses, axis=0), **params
-        )
 
         # Name the populations
         if names is None and all(
@@ -1596,12 +1643,12 @@ class Stars(StarsComponent):
             names = [
                 n for stars in populations for n in stars.population_names
             ]
-        if names is not None and len(names) != combined.npop:
+        masses = np.concatenate(all_masses, axis=0)
+        if names is not None and len(names) != masses.shape[0]:
             raise exceptions.InconsistentArguments(
-                f"Got {len(names)} names for {combined.npop} populations."
+                f"Got {len(names)} names for {masses.shape[0]} populations."
             )
-        combined.population_names = None if names is None else list(names)
-        return combined
+        return first._from_bins(edges, masses, names=names, **params)
 
     @staticmethod
     def _combine_morphologies(populations):
@@ -1656,24 +1703,23 @@ class Stars(StarsComponent):
                 )
 
         # Pick out this population's parameters
-        params = {}
+        params = self._get_population_params()
         for name in self._parameter_names:
-            value = getattr(self, name, None)
+            value = params[name]
             if np.size(value) == self.npop and self.npop > 1:
-                value = np.asarray(value)[index]
-            params[name] = value
+                # Indexing an array directly keeps any units it has
+                if not isinstance(value, np.ndarray):
+                    value = np.asarray(value)
+                params[name] = value[index]
 
-        # And its morphology
-        params["morphology"] = self.morphology
-
-        population = self._from_bins(
+        return self._from_bins(
             {axis: edges.copy() for axis, edges in self._bin_edges.items()},
             self.bin_masses[index : index + 1].copy(),
+            names=None
+            if self.population_names is None
+            else [self.population_names[index]],
             **params,
         )
-        if self.population_names is not None:
-            population.population_names = [self.population_names[index]]
-        return population
 
     def __add__(self, other_stars):
         """Add two Stars instances together.
@@ -1854,6 +1900,8 @@ class Stars(StarsComponent):
             self.bin_masses.copy(),
             log10ages=log10ages,
             metallicities=metallicities,
+            names=self.population_names,
+            **self._get_population_params(),
         )
 
     def plot_sfzh(

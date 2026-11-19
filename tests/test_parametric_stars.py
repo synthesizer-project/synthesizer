@@ -11,7 +11,7 @@ Tests cover:
 import numpy as np
 import pytest
 from scipy.integrate import quad
-from unyt import Gyr, Msun, Myr, angstrom, dimensionless, kpc, yr
+from unyt import Gyr, K, Msun, Myr, angstrom, dimensionless, kpc, yr
 
 import synthesizer.parametric.stars as stars_module
 from synthesizer import exceptions
@@ -1609,6 +1609,128 @@ class TestPopulations:
         assert bulge.tau_v == 0.2
         np.testing.assert_allclose(bulge.initial_mass, 2e9 * Msun)
         np.testing.assert_allclose(stars[0].tau_v, 0.8)
+
+
+class TestPopulationDescription:
+    """Tests that the description of the populations is carried around."""
+
+    @pytest.fixture
+    def combined(self, test_grid):
+        """Return two named populations with their own temperature.
+
+        Args:
+            test_grid (Grid):
+                The test grid fixture.
+
+        Returns:
+            Stars:
+                The combined populations.
+        """
+        return Stars.from_populations(
+            [
+                Stars(
+                    test_grid.log10ages,
+                    test_grid.metallicities,
+                    sf_hist=SFH.Constant(max_age=max_age),
+                    metal_dist=0.01,
+                    initial_mass=1e9 * Msun,
+                    temperature=temperature,
+                    tau_v=0.3,
+                )
+                for max_age, temperature in (
+                    (50 * Myr, 30 * K),
+                    (1 * Gyr, 50 * K),
+                )
+            ],
+            names=["young", "old"],
+        )
+
+    def test_units_survive_combining(self, combined):
+        """Parameters with units keep them, per population or shared.
+
+        Args:
+            combined (Stars):
+                The combined populations fixture.
+        """
+        # A differing parameter has one value per population, with units
+        np.testing.assert_array_equal(combined.temperature, [30, 50] * K)
+        assert combined["old"].temperature == 50 * K
+
+        # A shared one stays a single value
+        assert combined.tau_v == 0.3
+
+    def test_unset_parameters_are_dropped(self, test_grid):
+        """A parameter only some populations have set isn't combined.
+
+        Args:
+            test_grid (Grid):
+                The test grid fixture.
+        """
+        # Make one population with a temperature and one where it is None
+        populations = [
+            Stars(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                sf_hist=SFH.Constant(max_age=50 * Myr),
+                metal_dist=0.01,
+                initial_mass=1e9 * Msun,
+                temperature=temperature,
+            )
+            for temperature in (30 * K, None)
+        ]
+
+        # Combining them warns and leaves the temperature unset
+        with pytest.warns(match="Only some of the populations"):
+            combined = Stars.from_populations(populations)
+        assert getattr(combined, "temperature", None) is None
+
+    def test_description_survives_remapping(self, combined, test_grid):
+        """An earlier time or new axes keep the names and parameters.
+
+        Args:
+            combined (Stars):
+                The combined populations fixture.
+            test_grid (Grid):
+                The test grid fixture.
+        """
+        # Loop over the two ways of remapping the populations
+        for remapped in (
+            combined.get_at_earlier_time(10 * Myr),
+            combined.get_sfzh(
+                test_grid.log10ages[::2], test_grid.metallicities
+            ),
+        ):
+            assert remapped.population_names == ["young", "old"]
+            np.testing.assert_array_equal(
+                remapped.temperature, combined.temperature
+            )
+            assert remapped["old"].temperature == 50 * K
+            assert remapped.tau_v == 0.3
+
+    def test_earlier_time_then_addition_conserves_mass(self, test_grid):
+        """Adding to Stars clipped at an axis age keeps every point's mass.
+
+        Args:
+            test_grid (Grid):
+                The test grid fixture.
+        """
+        # Put mass on three ages of the axes
+        sfzh = np.zeros(
+            (test_grid.log10ages.size, test_grid.metallicities.size)
+        )
+        sfzh[[2, 5, 8], 1] = (4.0, 3.0, 2.0)
+        stars = Stars(test_grid.log10ages, test_grid.metallicities, sfzh=sfzh)
+
+        # Going back to exactly the middle age leaves several zero width
+        # bins at an age of zero, one of them holding mass
+        earlier = stars.get_at_earlier_time(10 ** test_grid.log10ages[5] * yr)
+        np.testing.assert_allclose(earlier.bin_masses.sum(), 5.0)
+
+        # Adding rebins these onto shared edges without moving the mass
+        combined = earlier + stars
+        np.testing.assert_allclose(combined.bin_masses[0].sum(), 5.0)
+        np.testing.assert_allclose(combined.bin_masses[1].sum(), 9.0)
+        np.testing.assert_allclose(combined[0].sfzh, earlier.sfzh)
 
 
 class TestPerPopulationEmission:
