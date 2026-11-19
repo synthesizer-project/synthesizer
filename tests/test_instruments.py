@@ -5,11 +5,13 @@ from types import SimpleNamespace
 import h5py
 import numpy as np
 import pytest
-from unyt import angstrom, arcsecond, kpc, nJy, unyt_quantity
+from astropy.cosmology import Planck18
+from unyt import Hz, angstrom, arcsecond, erg, kpc, nJy, s, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.components.component import Component
+from synthesizer.emissions import Sed
 from synthesizer.imaging import SpectralCube
 from synthesizer.imaging.postprocess import _postprocess_existing_data_cubes
 from synthesizer.instruments import (
@@ -21,6 +23,7 @@ from synthesizer.instruments import (
     PhotometricImager,
     PhotometricInstrument,
     SpectroscopicInstrument,
+    get_lams_from_resolving_power,
 )
 from synthesizer.instruments.premade import GALEXFUV, GALEXNUV, JWSTNIRSpec
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
@@ -87,10 +90,16 @@ class DummySpectroscopicInstrument:
         """Return whether this dummy instrument should add noise."""
         return self.noisy
 
-    def apply_lam_array(self, sed):
-        """Record the delegated wavelength-application call."""
+    def apply_lam_array_lnu(self, sed):
+        """Record the delegated rest frame wavelength-application call."""
         marker = object()
-        self.calls.append({"sed": sed, "result": marker})
+        self.calls.append({"sed": sed, "result": marker, "quantity": "lnu"})
+        return marker
+
+    def apply_lam_array_fnu(self, sed):
+        """Record the delegated observer frame wavelength-application call."""
+        marker = object()
+        self.calls.append({"sed": sed, "result": marker, "quantity": "fnu"})
         return marker
 
     def apply_noise(self, spectrum):
@@ -552,74 +561,180 @@ def test_component_psf_routing_delegates_to_instrument(
     )
 
 
-def test_spectroscopic_instrument_apply_lam_array_delegates_to_resampling():
-    """apply_lam_array should use the existing SED resampling primitive."""
+def _observed_top_hat_sed(z):
+    """Build a top-hat Sed observed at redshift z.
+
+    The emission is only between 5000 and 6000 A in the rest frame, so
+    between 5000 * (1 + z) and 6000 * (1 + z) A in the observer frame.
+
+    Args:
+        z (float):
+            The redshift to observe the Sed at.
+
+    Returns:
+        Sed:
+            The Sed with its fluxes computed at z.
+    """
+    # Build the top-hat luminosity and compute its fluxes at z
+    lam = np.arange(1000.0, 20001.0, 10.0) * angstrom
+    inside = (lam >= 5000 * angstrom) & (lam <= 6000 * angstrom)
+    sed = Sed(lam, np.where(inside, 1e28, 0.0) * erg / s / Hz)
+    sed.get_fnu(Planck18, z)
+    return sed
+
+
+def test_apply_lam_array_fnu_uses_observer_frame_wavelengths():
+    """apply_lam_array_fnu should treat the instrument grid as observer frame.
+
+    A Sed with emission only between 5000 and 6000 A in the rest frame should
+    be seen by an instrument covering 9000-13000 A at z=1, with the observed
+    wavelengths of the result matching the instrument's.
+    """
+    # Observe the top-hat at z=1
+    z = 1.0
+    sed = _observed_top_hat_sed(z)
+
+    # Define an instrument whose observer frame window contains the emission
     instrument = SpectroscopicInstrument(
         label="spec",
-        lam=np.linspace(1000, 3000, 32) * angstrom,
+        lam=np.arange(9000.0, 13001.0, 10.0) * angstrom,
     )
-    sed = SimpleNamespace()
-    expected = object()
-    captured = {}
 
-    def fake_apply_instrument_lams(passed_instrument, nthreads=1):
-        captured["instrument"] = passed_instrument
-        captured["nthreads"] = nthreads
-        return expected
+    # Resample onto the instrument grid
+    spec = instrument.apply_lam_array_fnu(sed)
 
-    sed.apply_instrument_lams = fake_apply_instrument_lams
+    # The observed grid should be the instrument grid and the rest frame
+    # grid should be that shifted back by (1 + z)
+    np.testing.assert_allclose(spec.obslam, instrument.lam)
+    np.testing.assert_allclose(spec.lam, instrument.lam / (1.0 + z))
 
-    result = instrument.apply_lam_array(sed, nthreads=4)
-
-    assert result is expected
-    assert captured["instrument"] is instrument
-    assert captured["nthreads"] == 4
+    # The flux should land in the observer frame emission window
+    seen = spec.fnu.value > 0
+    assert seen.any()
+    assert spec.obslam[seen].min() >= 9990.0 * angstrom
+    assert spec.obslam[seen].max() <= 12010.0 * angstrom
 
 
-def test_base_galaxy_spectroscopy_routing_delegates_to_instrument():
+def test_apply_lam_array_lnu_uses_rest_frame_wavelengths():
+    """apply_lam_array_lnu should treat the instrument grid as rest frame."""
+    # Observe the top-hat at z=1
+    z = 1.0
+    sed = _observed_top_hat_sed(z)
+
+    # Define an instrument whose rest frame window contains the emission
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.arange(4000.0, 7001.0, 10.0) * angstrom,
+    )
+
+    # Resample onto the instrument grid
+    spec = instrument.apply_lam_array_lnu(sed)
+
+    # The rest frame grid should be the instrument grid and the observed grid
+    # should be that shifted forward by (1 + z)
+    np.testing.assert_allclose(spec.lam, instrument.lam)
+    np.testing.assert_allclose(spec.obslam, instrument.lam * (1.0 + z))
+
+    # The luminosity should land in the rest frame emission window
+    seen = spec.lnu.value > 0
+    assert seen.any()
+    assert spec.lam[seen].min() >= 4990.0 * angstrom
+    assert spec.lam[seen].max() <= 6010.0 * angstrom
+
+
+def test_apply_lam_array_is_deprecated_alias_of_fnu():
+    """apply_lam_array should warn and match apply_lam_array_fnu."""
+    sed = _observed_top_hat_sed(1.0)
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.arange(9000.0, 13001.0, 10.0) * angstrom,
+    )
+
+    # The deprecated method warns about its removal
+    with pytest.warns(FutureWarning, match="1.4.0"):
+        spec = instrument.apply_lam_array(sed)
+
+    # It gives the same result as the observer frame method
+    expected = instrument.apply_lam_array_fnu(sed)
+    np.testing.assert_allclose(spec.obslam, expected.obslam)
+    np.testing.assert_allclose(spec.fnu, expected.fnu)
+
+
+def test_apply_instrument_lams_is_deprecated_alias_of_fnu():
+    """Sed.apply_instrument_lams should warn and match apply_lam_array_fnu."""
+    sed = _observed_top_hat_sed(1.0)
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.arange(9000.0, 13001.0, 10.0) * angstrom,
+    )
+
+    # The deprecated method warns about its removal
+    with pytest.warns(FutureWarning, match="1.4.0"):
+        spec = sed.apply_instrument_lams(instrument)
+
+    # It gives the same result as the observer frame method
+    expected = instrument.apply_lam_array_fnu(sed)
+    np.testing.assert_allclose(spec.obslam, expected.obslam)
+    np.testing.assert_allclose(spec.fnu, expected.fnu)
+
+
+@pytest.mark.parametrize("quantity", ["lnu", "fnu"])
+def test_base_galaxy_spectroscopy_routing_delegates_to_instrument(quantity):
     """Base-galaxy spectroscopy should delegate to the instrument."""
     sed = object()
     galaxy = SimpleNamespace(
         spectra={"stellar": sed},
-        spectroscopy={},
+        spectroscopy_lnu={},
+        spectroscopy_fnu={},
         stars=None,
         black_holes=None,
     )
     instrument = DummySpectroscopicInstrument()
 
-    returned = BaseGalaxy.get_spectroscopy(galaxy, instrument)
+    returned = BaseGalaxy._get_spectroscopy(galaxy, instrument, quantity)
 
+    # The matching instrument method was used and the result stored in the
+    # matching dictionary only
     assert instrument.calls[0]["sed"] is sed
+    assert instrument.calls[0]["quantity"] == quantity
     assert returned["stellar"] is instrument.calls[0]["result"]
-    assert (
-        galaxy.spectroscopy["inst"]["stellar"] is instrument.calls[0]["result"]
-    )
+    spectroscopy = getattr(galaxy, f"spectroscopy_{quantity}")
+    assert spectroscopy["inst"]["stellar"] is instrument.calls[0]["result"]
+    other = "fnu" if quantity == "lnu" else "lnu"
+    assert getattr(galaxy, f"spectroscopy_{other}") == {}
 
 
-def test_component_spectroscopy_routing_delegates_to_instrument():
+@pytest.mark.parametrize("quantity", ["lnu", "fnu"])
+def test_component_spectroscopy_routing_delegates_to_instrument(quantity):
     """Component spectroscopy should delegate to the instrument."""
     sed = object()
     particle_sed = object()
     component = SimpleNamespace(
         spectra={"stellar": sed},
-        spectroscopy={},
+        spectroscopy_lnu={},
+        spectroscopy_fnu={},
         particle_spectra={"stellar": particle_sed},
-        particle_spectroscopy={},
+        particle_spectroscopy_lnu={},
+        particle_spectroscopy_fnu={},
     )
     instrument = DummySpectroscopicInstrument()
 
-    returned = Component.get_spectroscopy(component, instrument)
+    returned = Component._get_spectroscopy(component, instrument, quantity)
 
+    # The matching instrument method was used for both the integrated and
+    # particle spectra, with the results stored in the matching dictionaries
     assert instrument.calls[0]["sed"] is sed
     assert instrument.calls[1]["sed"] is particle_sed
+    assert {call["quantity"] for call in instrument.calls} == {quantity}
     assert returned["stellar"] is instrument.calls[0]["result"]
-    assert (
-        component.spectroscopy["inst"]["stellar"]
-        is instrument.calls[0]["result"]
+    spectroscopy = getattr(component, f"spectroscopy_{quantity}")
+    particle_spectroscopy = getattr(
+        component, f"particle_spectroscopy_{quantity}"
     )
+    assert spectroscopy["inst"]["stellar"] is instrument.calls[0]["result"]
     assert (
-        component.particle_spectroscopy["inst"]["stellar"]
-        is (instrument.calls[1]["result"])
+        particle_spectroscopy["inst"]["stellar"]
+        is instrument.calls[1]["result"]
     )
 
 
@@ -628,21 +743,133 @@ def test_component_spectroscopy_applies_noise_when_configured():
     sed = object()
     component = SimpleNamespace(
         spectra={"stellar": sed},
-        spectroscopy={},
+        spectroscopy_lnu={},
+        spectroscopy_fnu={},
         particle_spectra={},
-        particle_spectroscopy={},
+        particle_spectroscopy_lnu={},
+        particle_spectroscopy_fnu={},
     )
     instrument = DummySpectroscopicInstrument(noisy=True)
 
-    returned = Component.get_spectroscopy(component, instrument)
+    returned = Component._get_spectroscopy(component, instrument, "fnu")
 
     assert instrument.calls[0]["sed"] is sed
     assert instrument.calls[1]["spectrum"] is instrument.calls[0]["result"]
     assert returned["stellar"] is instrument.calls[1]["noise_result"]
     assert (
-        component.spectroscopy["inst"]["stellar"]
+        component.spectroscopy_fnu["inst"]["stellar"]
         is instrument.calls[1]["noise_result"]
     )
+
+
+def _top_hat_galaxy(z):
+    """Build a particle galaxy holding an observed top-hat spectrum.
+
+    Args:
+        z (float):
+            The redshift of the galaxy and its spectrum.
+
+    Returns:
+        ParticleGalaxy:
+            The galaxy with the spectrum stored under "toy".
+    """
+    galaxy = ParticleGalaxy(redshift=z)
+    galaxy.spectra["toy"] = _observed_top_hat_sed(z)
+    return galaxy
+
+
+def test_galaxy_get_spectroscopy_fnu_uses_observer_frame_wavelengths():
+    """get_spectroscopy_fnu should see the emission at observed wavelengths."""
+    # Observe the top-hat at z=1 with an instrument covering its observer
+    # frame window
+    galaxy = _top_hat_galaxy(1.0)
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.arange(9000.0, 13001.0, 10.0) * angstrom,
+    )
+
+    spec = galaxy.get_spectroscopy_fnu(instrument)["toy"]
+
+    # The result is stored in the fnu dictionary, on the instrument grid,
+    # with the flux in the observer frame emission window
+    assert galaxy.spectroscopy_fnu["spec"]["toy"] is spec
+    assert galaxy.spectroscopy_lnu == {}
+    np.testing.assert_allclose(spec.obslam, instrument.lam)
+    seen = spec.fnu.value > 0
+    assert seen.any()
+    assert spec.obslam[seen].min() >= 9990.0 * angstrom
+    assert spec.obslam[seen].max() <= 12010.0 * angstrom
+
+
+@pytest.mark.parametrize(
+    "quantity,frame_lam",
+    [("lnu", "lam"), ("fnu", "obslam")],
+)
+def test_component_plot_spectroscopy_uses_matching_frame(quantity, frame_lam):
+    """Component spectroscopy plots should read and plot the matching frame.
+
+    Args:
+        quantity (str):
+            The frame to plot, "lnu" or "fnu".
+        frame_lam (str):
+            The Sed wavelength attribute the plot should use as its x axis.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    # Store the observed top-hat in only the requested frame's dictionary,
+    # so plotting the wrong frame raises a KeyError
+    sed = _observed_top_hat_sed(1.0)
+    component = SimpleNamespace(
+        redshift=1.0,
+        spectroscopy_lnu={},
+        spectroscopy_fnu={},
+    )
+    getattr(component, f"spectroscopy_{quantity}")["spec"] = {"toy": sed}
+
+    fig, ax = Component._plot_spectroscopy(component, "spec", quantity)
+
+    # The plotted wavelengths are those of the requested frame
+    np.testing.assert_allclose(
+        ax.lines[0].get_xdata(),
+        getattr(sed, frame_lam).value,
+    )
+    plt.close(fig)
+
+
+def test_galaxy_get_spectroscopy_is_deprecated_alias_of_fnu():
+    """get_spectroscopy and spectroscopy should warn and alias the fnu API."""
+    galaxy = _top_hat_galaxy(1.0)
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.arange(9000.0, 13001.0, 10.0) * angstrom,
+    )
+
+    # The deprecated method warns and stores into the fnu dictionary
+    with pytest.warns(FutureWarning, match="1.4.0"):
+        returned = galaxy.get_spectroscopy(instrument)
+    assert returned is galaxy.spectroscopy_fnu["spec"]
+
+    # The deprecated attribute warns and points at the fnu dictionary
+    with pytest.warns(FutureWarning, match="1.4.0"):
+        assert galaxy.spectroscopy is galaxy.spectroscopy_fnu
+
+    # The component attributes alias the fnu dictionaries in the same way
+    component = SimpleNamespace(
+        spectroscopy_fnu={}, particle_spectroscopy_fnu={}
+    )
+    with pytest.warns(FutureWarning, match="1.4.0"):
+        assert (
+            Component.spectroscopy.fget(component)
+            is component.spectroscopy_fnu
+        )
+    with pytest.warns(FutureWarning, match="1.4.0"):
+        assert (
+            Component.particle_spectroscopy.fget(component)
+            is component.particle_spectroscopy_fnu
+        )
 
 
 def test_component_image_generation_delegates_to_instrument():
@@ -800,7 +1027,7 @@ class TestIntegratedFieldUnitPsfApplication:
     """Tests for instrument-owned PSF application on IFU cubes."""
 
     @staticmethod
-    def _instrument(psfs, psf_pixel_scale=1 * arcsecond):
+    def _instrument(psfs, psf_pixel_scale=1 * arcsecond, psf_lam=None):
         """Construct a minimal IFU for PSF-application tests."""
         return IntegratedFieldUnit(
             label="ifu",
@@ -808,6 +1035,7 @@ class TestIntegratedFieldUnitPsfApplication:
             resolution=1 * arcsecond,
             psfs=psfs,
             psf_pixel_scale=psf_pixel_scale,
+            psf_lam=psf_lam,
         )
 
     def test_apply_psf_to_cube_with_2d_psf(
@@ -928,34 +1156,79 @@ class TestIntegratedFieldUnitPsfApplication:
         with pytest.raises(exceptions.InconsistentArguments):
             instrument.apply_psf_to_cube(spectral_cube_with_central_source)
 
-    def test_apply_psf_to_cube_rejects_mismatched_psf_wavelengths(
+    def test_apply_psf_to_cube_interpolates_psf_wavelength_planes(
         self, spectral_cube_with_central_source
     ):
-        """A 3D PSF should use the same wavelength grid as its cube."""
-        psfs = np.zeros((3, 3, 3), dtype=float)
-        psfs[1, 1, :] = 1.0
-        instrument = IntegratedFieldUnit(
-            label="ifu",
-            lam=spectral_cube_with_central_source.lam + 1 * angstrom,
-            resolution=1 * arcsecond,
-            psfs=psfs,
-            psf_pixel_scale=1 * arcsecond,
+        """A 3D PSF should interpolate planes from a distinct grid."""
+        psfs = np.zeros((3, 3, 2), dtype=float)
+        psfs[1, 1, 0] = 1.0
+        psfs[1, 0, 1] = 1.0
+        instrument = self._instrument(
+            psfs,
+            psf_lam=np.array([900.0, 2100.0]) * angstrom,
         )
 
-        with pytest.raises(exceptions.InconsistentArguments):
-            instrument.apply_psf_to_cube(spectral_cube_with_central_source)
+        result = instrument.apply_psf_to_cube(
+            spectral_cube_with_central_source
+        )
 
-    def test_apply_psf_to_cube_rejects_mismatched_psf_wavelength_axis(
-        self, spectral_cube_with_central_source
-    ):
-        """A 3D PSF should have one plane for every cube wavelength."""
+        np.testing.assert_allclose(
+            result.arr[4, 4, :],
+            [11 / 12, 1 / 12, 0],
+        )
+        np.testing.assert_allclose(
+            result.arr[4, 3, :],
+            [1 / 12, 11 / 12, 1],
+        )
+
+    def test_psf_plane_count_must_match_psf_lam(self):
+        """A 3D PSF must have one plane per PSF wavelength."""
         psfs = np.zeros((3, 3, 2), dtype=float)
         psfs[1, 1, :] = 1.0
 
         with pytest.raises(exceptions.InconsistentArguments):
-            self._instrument(psfs).apply_psf_to_cube(
-                spectral_cube_with_central_source
-            )
+            self._instrument(psfs)
+
+    @pytest.mark.parametrize(
+        "psf_lam",
+        [
+            np.array([[1000.0, 2000.0, 3000.0]]) * angstrom,
+            np.array([]) * angstrom,
+            np.array([1000.0, np.inf, 3000.0]) * angstrom,
+            np.array([1000.0, 0.0, 3000.0]) * angstrom,
+            np.array([1000.0, 1000.0, 3000.0]) * angstrom,
+        ],
+        ids=(
+            "two_dimensional",
+            "empty",
+            "infinite",
+            "non_positive",
+            "unordered",
+        ),
+    )
+    def test_psf_lam_must_be_a_valid_wavelength_grid(self, psf_lam):
+        """PSF wavelength grids must be one-dimensional and increasing."""
+        psfs = np.zeros((3, 3, 3), dtype=float)
+        psfs[1, 1, :] = 1.0
+
+        with pytest.raises(exceptions.InconsistentArguments):
+            self._instrument(psfs, psf_lam=psf_lam)
+
+    def test_psf_lam_is_normalized_to_the_instrument_grid(self):
+        """IFUs compare using their PSFs resampled to the instrument grid."""
+        psfs = np.zeros((3, 3, 3), dtype=float)
+        psfs[1, 1, :] = 1.0
+        psf_lam = np.array([1000.0, 2000.0, 3000.0]) * angstrom
+        instrument = self._instrument(psfs, psf_lam=psf_lam)
+        identical = self._instrument(psfs.copy(), psf_lam=psf_lam.copy())
+        different = self._instrument(
+            psfs.copy(), psf_lam=psf_lam + 1 * angstrom
+        )
+
+        assert instrument == identical
+        assert instrument == different
+        np.testing.assert_allclose(instrument.psf_lam, instrument.lam)
+        np.testing.assert_allclose(different.psf_lam, different.lam)
 
     def test_apply_psf_to_cube_with_resampling_does_not_mutate_input(
         self, spectral_cube_with_central_source
@@ -1041,31 +1314,53 @@ class TestIntegratedFieldUnitPsfApplication:
         assert not np.allclose(processed_cube.arr, raw_cube.arr)
 
     @pytest.mark.parametrize(
-        ("psfs", "psf_pixel_scale"),
+        ("psfs", "psf_pixel_scale", "psf_lam"),
         [
-            (None, None),
-            (np.ones((3, 3), dtype=float) / 9, 0.5 * arcsecond),
+            (None, None, None),
+            (np.ones((3, 3), dtype=float) / 9, 0.5 * arcsecond, None),
+            (
+                np.repeat(
+                    (np.ones((3, 3), dtype=float) / 9)[:, :, None],
+                    2,
+                    axis=2,
+                ),
+                0.5 * arcsecond,
+                np.array([900.0, 2100.0]) * angstrom,
+            ),
         ],
-        ids=("without_psfs", "with_psfs"),
+        ids=("without_psfs", "two_dimensional_psfs", "custom_psf_lam"),
     )
-    def test_hdf5_roundtrip_preserves_psf_pixel_scale(
-        self, tmp_path, psfs, psf_pixel_scale
+    def test_hdf5_roundtrip_preserves_psf_metadata(
+        self, tmp_path, psfs, psf_pixel_scale, psf_lam
     ):
-        """IFU HDF5 serialisation should preserve PSF sampling metadata."""
+        """IFU HDF5 serialisation should preserve PSF metadata."""
         instrument = IntegratedFieldUnit(
             label="ifu",
             lam=np.linspace(1000, 3000, 3) * angstrom,
             resolution=1 * arcsecond,
             psfs=psfs,
             psf_pixel_scale=psf_pixel_scale,
+            psf_lam=psf_lam,
         )
+        expected_psf_lam = instrument.psf_lam
+        expected_psfs = instrument.psfs
         filepath = tmp_path / "ifu.hdf5"
 
         with h5py.File(filepath, "w") as hdf:
             instrument.to_hdf5(hdf)
         with h5py.File(filepath, "r") as hdf:
+            assert "PSFWavelength" in hdf
+            assert "units" in hdf["PSFWavelength"].attrs
+            np.testing.assert_allclose(
+                hdf["PSFWavelength"][...],
+                expected_psf_lam.to("angstrom").value,
+            )
             restored = IntegratedFieldUnit._from_hdf5(hdf)
 
+        np.testing.assert_allclose(
+            restored.psf_lam.to("angstrom").value,
+            expected_psf_lam.to("angstrom").value,
+        )
         if psf_pixel_scale is None:
             assert restored.psf_pixel_scale is None
             assert restored.psfs is None
@@ -1074,7 +1369,24 @@ class TestIntegratedFieldUnitPsfApplication:
             np.testing.assert_allclose(
                 restored.psf_pixel_scale.value, psf_pixel_scale.value
             )
-            np.testing.assert_allclose(restored.psfs, psfs)
+            np.testing.assert_allclose(restored.psfs, expected_psfs)
+
+    def test_hdf5_load_without_psf_wavelength_defaults_to_lam(self, tmp_path):
+        """Legacy IFU files should use the instrument grid for PSF planes."""
+        psfs = np.repeat(
+            (np.ones((3, 3), dtype=float) / 9)[:, :, None], 3, axis=2
+        )
+        instrument = self._instrument(psfs)
+        filepath = tmp_path / "legacy_ifu.hdf5"
+
+        with h5py.File(filepath, "w") as hdf:
+            instrument.to_hdf5(hdf)
+        with h5py.File(filepath, "a") as hdf:
+            del hdf["PSFWavelength"]
+        with h5py.File(filepath, "r") as hdf:
+            restored = IntegratedFieldUnit._from_hdf5(hdf)
+
+        np.testing.assert_allclose(restored.psf_lam, instrument.lam)
 
 
 def test_integrated_field_unit_noise_placeholders_raise():
@@ -1602,3 +1914,35 @@ def test_resolving_power_must_be_positive_number(resolving_power):
             lam=np.linspace(1000, 3000, 32) * angstrom,
             resolving_power=resolving_power,
         )
+
+
+def test_lams_from_constant_resolving_power():
+    """A constant resolving power gives distinct, evenly log-spaced lams."""
+    lams = get_lams_from_resolving_power(
+        1000.0 * angstrom, 2000.0 * angstrom, 100.0
+    )
+
+    # Every wavelength is distinct, rising and within the requested range
+    assert np.all(np.diff(lams.value) > 0)
+    assert lams[0] == 1000 * angstrom
+    assert lams[-1] <= 2000 * angstrom
+
+    # Each step is lambda / R
+    np.testing.assert_allclose(lams.value[1:] / lams.value[:-1], 1.01)
+
+
+def test_lams_from_varying_resolving_power():
+    """A wavelength-dependent resolving power sets each step."""
+
+    def resolving_power(lam):
+        return lam.to_value("angstrom") / 10
+
+    lams = get_lams_from_resolving_power(
+        1000.0 * angstrom, 2005.0 * angstrom, resolving_power
+    )
+
+    # R = lambda / 10 A means a constant 10 A step, so 101 wavelengths
+    # from 1000 A to 2000 A
+    np.testing.assert_allclose(np.diff(lams.value), 10.0)
+    assert len(lams) == 101
+    np.testing.assert_allclose(lams[-1].value, 2000.0)
