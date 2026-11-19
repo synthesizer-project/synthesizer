@@ -715,11 +715,30 @@ class Stars(StarsComponent):
                 # Each metallicity is a point, split linearly between the
                 # points of a fine metallicity axis
                 points = self._get_fine_edges(metals)[1:]
+
+                # Add points for any metallicities beyond the axis (where
+                # mass forms), so they keep their value (as a constant one
+                # does) and aren't clamped onto its ends
+                values = np.broadcast_to(
+                    dist.get_metallicities(ages * yr), ages.shape
+                )
+                formed = values[weights * age_masses[:, None] > 0]
+                ends = (
+                    np.array([formed.min(), formed.max()])
+                    if formed.size > 0
+                    else points[:1]
+                )
+                points = np.unique(
+                    np.concatenate(
+                        [
+                            points,
+                            ends[(ends < points[0]) | (ends > points[-1])],
+                        ]
+                    )
+                )
                 metal_edges = np.repeat(points, 2)
                 metal_weights = self._average_over_samples(
-                    self._deposit_on_points(
-                        dist.get_metallicities(ages * yr), points
-                    ),
+                    self._deposit_on_points(values, points),
                     weights,
                 )
             else:
@@ -962,10 +981,10 @@ class Stars(StarsComponent):
                 ages, sample_weights = age_samples
                 if callable(weights):
                     values = weights(ages * yr)
-                    if isinstance(values, unyt_array) and axis_units:
-                        values = values.to(axis_units)
                     if isinstance(values, unyt_array):
-                        values = values.to("dimensionless").ndview
+                        values = convert_in_place(
+                            values, axis_units or "dimensionless"
+                        ).ndview
                     per_sample = cls._deposit_on_points(values, axis_edges)
                     axis_edges = np.repeat(axis_edges, 2)
                 else:
@@ -991,6 +1010,12 @@ class Stars(StarsComponent):
                 raise exceptions.InconsistentArguments(
                     f"Got {weights.size} {axis} weights for "
                     f"{axis_edges.size - 1} bins."
+                )
+
+            # The weights are normalised, so they need a positive sum
+            if not np.sum(weights) > 0:
+                raise exceptions.InconsistentArguments(
+                    f"The {axis} weights must have a positive sum."
                 )
 
             edges[axis] = axis_edges
@@ -1239,9 +1264,17 @@ class Stars(StarsComponent):
         log = axis_name.startswith("log10")
         axis = axis_name[5:] if log else axis_name
 
+        # A model can fix a log10 axis by its linear name, which is looked
+        # up directly so a log10 attribute on this object can't shadow it
+        fixed = getattr(model, "fixed_parameters", {})
+        if log and axis in fixed and axis_name not in fixed:
+            axis_name, log = axis, False
+
         # Look the value up on the model then this object
         try:
-            value = get_param(axis_name, model, None, self)
+            value = get_param(
+                axis_name, model, None, self, preserve_units=True
+            )
         except exceptions.MissingAttribute:
             raise exceptions.MissingAttribute(
                 f"This parametric Stars has no bins or value along {axis}. "
@@ -1249,9 +1282,14 @@ class Stars(StarsComponent):
                 "or the Stars."
             ) from None
 
-        # Get the linear value in the grid's units
+        # Get the linear value in the grid's units (a log10 value has no
+        # units to convert)
         if isinstance(value, (unyt_array, unyt_quantity)):
-            value = convert_in_place(value, grid._axes_units[axis]).ndview
+            value = (
+                value.ndview
+                if log
+                else convert_in_place(value, grid._axes_units[axis]).ndview
+            )
         value = np.atleast_1d(np.asarray(value, dtype=np.float64))
         if log:
             value = 10**value
@@ -1301,9 +1339,22 @@ class Stars(StarsComponent):
                 else (values[0], values[-1])
             )
 
-            # Without bins along this axis each population is entirely
+            # Without bins along this axis (or with a value fixed on the
+            # model, which overrides them) each population is entirely
             # inside or outside at its value
-            if axis not in self._bin_edges:
+            fixed = getattr(model, "fixed_parameters", {})
+            if (
+                axis not in self._bin_edges
+                or axis in fixed
+                or axis_name in fixed
+            ):
+                # Sum over the bins the fixed value replaces
+                if axis in self._bin_edges:
+                    inside = np.sum(
+                        inside,
+                        axis=self.bin_axes.index(axis) + 1,
+                        keepdims=True,
+                    )
                 value = self._get_unbinned_axis_value(grid, axis_name, model)
                 if value.size not in (1, self.npop):
                     raise exceptions.InconsistentArguments(
@@ -2116,7 +2167,9 @@ class Stars(StarsComponent):
                 raise exceptions.InconsistentAddition(
                     "Stars can only be combined if they have the same axes"
                 )
-            if other._bin_units != first._bin_units:
+            if list(other._bin_units.items()) != list(
+                first._bin_units.items()
+            ):
                 raise exceptions.InconsistentAddition(
                     "Stars can only be combined if they are binned along the "
                     f"same axes in the same units (got {first._bin_units} "

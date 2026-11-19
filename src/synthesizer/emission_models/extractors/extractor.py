@@ -1565,6 +1565,7 @@ class ParametricExtractorBase(Extractor):
             if (
                 bin_axis in emitter.bin_axes
                 and axis not in model.fixed_parameters
+                and bin_axis not in model.fixed_parameters
             ):
                 # Get the bin edges and the factor converting them into the
                 # grid's units (edges without units need no conversion)
@@ -1580,17 +1581,34 @@ class ParametricExtractorBase(Extractor):
                 )
                 continue
 
-            # Otherwise, get the attribute from the model or emitter
-            value = get_param(axis, model, None, emitter, preserve_units=True)
+            # Otherwise, get the attribute from the model or emitter (a
+            # model can fix a log10 axis by its linear name, which is looked
+            # up directly so an emitter's log10 attribute can't shadow it)
+            linear_fixed = (
+                log
+                and axis not in model.fixed_parameters
+                and bin_axis in model.fixed_parameters
+            )
+            value = get_param(
+                bin_axis if linear_fixed else axis,
+                model,
+                None,
+                emitter,
+                preserve_units=True,
+            )
 
             # Convert the units if necessary
             if isinstance(value, (unyt_array, unyt_quantity)):
-                if log or units == "dimensionless":
+                if (log and not linear_fixed) or units == "dimensionless":
                     value = value.ndview
                 elif value.units == Unit(units):
                     value = value.ndview
                 else:
                     value = convert_in_place(value, units).ndview
+
+            # A linear value for a log10 axis is logged like any other
+            if linear_fixed:
+                value = np.log10(value)
 
             # An axis the emitter isn't binned along can have a value per
             # population: give each distinct value a zero width bin holding

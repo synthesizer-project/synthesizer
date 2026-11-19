@@ -36,7 +36,7 @@ from synthesizer.imaging.postprocess import (
     _postprocess_existing_line_maps,
 )
 from synthesizer.synth_warnings import deprecated
-from synthesizer.units import unit_is_compatible
+from synthesizer.units import convert_in_place, unit_is_compatible
 from synthesizer.utils.ascii_table import TableFormatter
 
 
@@ -418,7 +418,7 @@ class Component(ABC):
             axis = axis_name[5:] if log else axis_name
             value = get_param(axis, model, None, self, preserve_units=True)
             if isinstance(value, (unyt_array, unyt_quantity)):
-                value = value.to(grid._axes_units[axis]).ndview
+                value = convert_in_place(value, grid._axes_units[axis]).ndview
             value = np.atleast_1d(np.asarray(value, dtype=np.float64))
             if log:
                 with np.errstate(divide="ignore", invalid="ignore"):
@@ -433,8 +433,8 @@ class Component(ABC):
             weight = get_param(grid._weight_var, model, None, self)
             if isinstance(weight, (unyt_array, unyt_quantity)):
                 weight = weight.ndview
-            weight = np.broadcast_to(
-                np.asarray(weight, np.float64), inside.shape
+            inside, weight = np.broadcast_arrays(
+                inside, np.asarray(weight, np.float64)
             )
         total = np.sum(weight)
         if total == 0:

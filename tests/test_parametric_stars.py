@@ -8,10 +8,12 @@ Tests cover:
 - calculate_surviving_mass_at_age
 """
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 from scipy.integrate import quad
-from unyt import Gyr, K, Msun, Myr, angstrom, dimensionless, kpc, yr
+from unyt import Gyr, K, Msun, Myr, angstrom, cm, dimensionless, kpc, m, yr
 
 import synthesizer.parametric.stars as stars_module
 from synthesizer import exceptions
@@ -850,6 +852,35 @@ class TestFractionOutsideGrid:
             np.ones((1, 1)),
         )
         assert stars.get_fraction_outside_grid(test_grid) == 1.0
+
+    def test_unbinned_value_is_converted_to_grid_units(self, test_grid):
+        """A value on an axis without bins is converted to grid units."""
+        stars = self._stars(test_grid)
+        stars.hydrogen_density = 1e8 / m**3
+
+        # Only the axis units are needed from the grid here
+        grid = SimpleNamespace(_axes_units={"hydrogen_density": cm**-3})
+        np.testing.assert_allclose(
+            stars._get_unbinned_axis_value(grid, "hydrogen_density"), 100.0
+        )
+
+    def test_model_value_overrides_bins(self, test_grid):
+        """A metallicity fixed on the model replaces the bins."""
+        stars = self._stars(test_grid)
+        inside = IncidentEmission(test_grid, metallicities=0.01)
+        outside = IncidentEmission(test_grid, metallicities=10.0)
+        assert stars.get_fraction_outside_grid(test_grid, inside) == 0.0
+        assert stars.get_fraction_outside_grid(test_grid, outside) == 1.0
+
+    def test_particles_with_model_fixed_axes(self, test_grid):
+        """Particles with every axis fixed on the model are handled."""
+        particles = ParticleStars(
+            initial_masses=np.ones(2) * Msun,
+            ages=np.full(2, 1e7) * yr,
+            metallicities=np.full(2, 0.01),
+        )
+        model = IncidentEmission(test_grid, ages=1e7 * yr, metallicities=0.01)
+        assert particles.get_fraction_outside_grid(test_grid, model) == 0.0
 
 
 # The bound parametric masks use for an open end of a range
@@ -2427,6 +2458,54 @@ class TestExtraAxes:
         with pytest.raises(exceptions.MissingAttribute):
             self._lnu(stars, u_grid)
 
+    def test_model_value_overrides_extra_axis_by_either_name(self, u_grid):
+        """A U fixed on the model replaces the bins along U."""
+        sfzh = self._sfzh(u_grid)
+        stars = Stars(
+            u_grid.log10ages,
+            u_grid.metallicities,
+            sfzh=sfzh,
+            extra_axes={"ionisation_parameter": 2e-4},
+        )
+        reference = self._lnu(self._particles(u_grid, sfzh, self.U), u_grid)
+
+        # The grid's axis is log10, fix it by both names
+        for fixed in (
+            {"ionisation_parameter": self.U},
+            {"log10ionisation_parameter": np.log10(self.U)},
+        ):
+            np.testing.assert_allclose(
+                self._lnu(stars, u_grid, **fixed), reference, rtol=1e-10
+            )
+
+    def test_axis_order_must_match_to_combine(self, test_grid):
+        """Populations with their extra axes in another order can't add."""
+        sfzh = self._sfzh(test_grid)
+        first, second = (
+            Stars(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                sfzh=sfzh,
+                extra_axes=dict(axes),
+            )
+            for axes in (
+                (("ionisation_parameter", 1e-3), ("hydrogen_density", 1e2)),
+                (("hydrogen_density", 1e2), ("ionisation_parameter", 1e-3)),
+            )
+        )
+        with pytest.raises(exceptions.InconsistentAddition):
+            first + second
+
+    def test_zero_weights_raise(self, test_grid):
+        """Extra axis weights that can't be normalised are rejected."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            Stars(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                sfzh=self._sfzh(test_grid),
+                extra_axes={"ionisation_parameter": ([1e-4, 1e-3], [0.0])},
+            )
+
 
 class TestAgeDependence:
     """Tests for distributions that depend on the stars' age."""
@@ -2532,3 +2611,30 @@ class TestAgeDependence:
                 0.01,
                 extra_axes={"ionisation_parameter": lambda age: 1e-3},
             )
+
+    def test_age_dependent_value_with_units(self, test_grid):
+        """A function of age can return values with the axis' units."""
+        stars = self._stars(
+            test_grid,
+            0.01,
+            extra_axes={
+                "hydrogen_density": (
+                    np.array([10.0, 100.0, 1000.0]) * cm**-3,
+                    lambda age: np.full(age.shape, 1e8) / m**3,
+                )
+            },
+        )
+
+        # All the mass is at the middle point (1e8 m**-3 is 100 cm**-3)
+        along_axis = np.sum(stars.bin_masses, axis=(0, 1, 2))
+        np.testing.assert_allclose(along_axis[2], np.sum(along_axis))
+
+    def test_enrichment_beyond_axis_keeps_its_value(self, test_grid):
+        """An age dependent metallicity beyond the axis isn't clamped."""
+        stars = self._stars(
+            test_grid, ZDist.DeltaConstant(metallicity=lambda age: 0.5)
+        )
+        assert stars.get_bin_edges("metallicities", values_only=True)[-1] == (
+            0.5
+        )
+        assert stars.get_fraction_outside_grid(test_grid) == 1.0
