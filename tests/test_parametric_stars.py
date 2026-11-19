@@ -1509,6 +1509,24 @@ class TestRebinning:
         rebinned = rebin_axis(masses, 1, edges, new_edges)
         np.testing.assert_allclose(rebinned, [[0.0, 2.0, 2.0, 2.0]])
 
+    def test_rebin_repeated_points(self):
+        """Several zero width bins at one value each keep their own mass."""
+        # Three zero width bins at 0 (as left by clipping bins to an age
+        # of zero), a finite bin and a zero width bin at 2
+        edges = np.array([0.0, 0.0, 0.0, 0.0, 2.0, 2.0])
+        masses = np.array([[1.0, 2.0, 4.0, 8.0, 16.0]])
+
+        # The union with edges repeating 0 even more often adds an empty
+        # zero width bin at 0 and splits the finite bin
+        new_edges = union_edges(edges, np.array([0.0] * 5 + [1.0]))
+        np.testing.assert_array_equal(
+            new_edges, [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 2.0, 2.0]
+        )
+        rebinned = rebin_axis(masses, 1, edges, new_edges)
+        np.testing.assert_allclose(
+            rebinned, [[1.0, 2.0, 4.0, 0.0, 4.0, 4.0, 16.0]]
+        )
+
 
 class TestPopulations:
     """Tests for Stars holding several populations."""

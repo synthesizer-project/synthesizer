@@ -87,7 +87,8 @@ def rebin_axis(masses, axis, edges, new_edges):
     of two sets of edges), so every new bin lies within a single old bin. A
     finite bin's mass is uniform within it, so each new finite bin takes the
     fraction of its old bin's mass given by their widths. A zero width bin's
-    mass moves to the zero width bin at the same value.
+    mass moves to the zero width bin at the same value (the first to the
+    first, the second to the second and so on when a value has several).
 
     Args:
         masses (np.ndarray):
@@ -119,13 +120,18 @@ def rebin_axis(masses, axis, edges, new_edges):
         0.0,
     )
 
-    # Zero width bins take the mass of the zero width bin at the same value
+    # Zero width bins take the mass of the zero width bin at the same value.
+    # A value can have several zero width bins (e.g. every bin clipped to
+    # an age of zero), so the nth new one at a value takes the nth old one
     points = np.flatnonzero(lo == hi)
     new_points = np.flatnonzero(new_lo == new_hi)
-    matches = np.searchsorted(lo[points], new_lo[new_points])
-    matches = np.clip(matches, 0, max(points.size - 1, 0))
     if points.size > 0:
-        found = lo[points][matches] == new_lo[new_points]
+        values, new_values = lo[points], new_lo[new_points]
+        rank = np.arange(new_values.size) - np.searchsorted(
+            new_values, new_values
+        )
+        matches = np.searchsorted(values, new_values) + rank
+        found = matches < np.searchsorted(values, new_values, side="right")
         source[new_points[found]] = points[matches[found]]
         fraction[new_points[found]] = 1.0
 
