@@ -1603,7 +1603,7 @@ class ParametricExtractorBase(Extractor):
             ):
                 points, index = np.unique(value, return_inverse=True)
 
-                # ponytail: copies the masses once per distinct value,
+                # TODO: copies the masses once per distinct value,
                 # give the extension a value per population if this ever
                 # matters
                 spread = np.zeros(
@@ -1757,7 +1757,7 @@ class ParametricExtractorBase(Extractor):
         # Remove the ranges along any axes the grid doesn't have
         dropped = self._get_dropped_axes(emitter)
         if len(dropped) > 0:
-            # ponytail: the masses are already summed over these axes, so a
+            # NOTE: the masses are already summed over these axes, so a
             # range restricting one can't be applied. Clip the bins before
             # summing if this is ever needed
             for i in dropped:
@@ -1790,7 +1790,7 @@ class ParametricExtractorBase(Extractor):
         if include.all():
             return weight, ranges, None
 
-        # ponytail: copies the included populations' masses (only when a
+        # NOTE: copies the included populations' masses (only when a
         # mask excludes some of them), give the extension a range per
         # population if this ever matters
         return weight[include], ranges, include

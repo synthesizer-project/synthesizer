@@ -1397,7 +1397,7 @@ class Stars(StarsComponent):
             if bin_axis not in edges:
                 value = self._get_unbinned_axis_value(grid, axis_name)
                 if value.size != 1:
-                    # ponytail: no value per population here, expand the
+                    # TODO: no value per population here, expand the
                     # masses as the extractor does if this is ever needed
                     raise exceptions.InconsistentArguments(
                         f"Mapping onto a grid needs a single {bin_axis}, "
