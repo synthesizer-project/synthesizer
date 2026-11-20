@@ -24,7 +24,24 @@ def run_script(
     grid_precision="float64",
     out_dtype=None,
 ):
-    """Run a python script and check for errors."""
+    """Run a profiling script, exiting if it fails.
+
+    Args:
+        script_name (str):
+            The script to run (relative to profiling/parametric).
+        project_root (Path):
+            The root of the repository, which the script is run from.
+        nthreads (int):
+            The number of threads to use.
+        n_averages (int):
+            The number of repeats each measurement is averaged over.
+        output_dir (Path):
+            The directory the plots are saved in.
+        grid_precision (str):
+            The precision the grid arrays are loaded at.
+        out_dtype (str):
+            The output precision, or None for the global default.
+    """
     print(
         f"Running {script_name} (nthreads={nthreads}, "
         f"n_averages={n_averages})..."
@@ -64,7 +81,21 @@ def make_all_plots(
     grid_precision="float64",
     out_dtype=None,
 ):
-    """Run all profiling scripts and collect plots in one directory."""
+    """Run all profiling scripts and collect plots in one directory.
+
+    Args:
+        nthreads (int):
+            The number of threads to use.
+        n_averages (int):
+            The number of repeats each measurement is averaged over.
+        output_dir (Path):
+            The directory the plots are saved in (relative to the root of
+            the repository).
+        grid_precision (str):
+            The precision the grid arrays are loaded at.
+        out_dtype (str):
+            The output precision, or None for the global default.
+    """
     # Define directories
     parametric_dir = Path(__file__).parent  # profiling/parametric/
     profiling_dir = parametric_dir.parent  # profiling/

@@ -28,9 +28,6 @@ plt.rcParams["font.family"] = "DejaVu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
 plt.rcParams["axes.titlesize"] = 0  # Force no titles
 
-# Set the seed
-np.random.seed(42)
-
 
 def profile_wavelength_memory(
     nthreads=1,
@@ -38,7 +35,18 @@ def profile_wavelength_memory(
     output_dir=Path("profiling/plots"),
     grid_precision="float64",
 ):
-    """Run the profiling."""
+    """Run the profiling and save the plots.
+
+    Args:
+        nthreads (int):
+            The number of threads to use.
+        n_averages (int):
+            The number of repeats each measurement is averaged over.
+        output_dir (Path):
+            The directory the plots are saved in.
+        grid_precision (str):
+            The precision the grid arrays are loaded at.
+    """
     print(
         f"Initializing Base Grid (nthreads={nthreads}, "
         f"n_averages={n_averages})..."
@@ -127,6 +135,12 @@ def profile_wavelength_memory(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     def make_plot(category_name):
+        """Plot every measurement of a category and save the figure.
+
+        Args:
+            category_name (str):
+                The category of measurements to plot.
+        """
         fig, ax = plt.subplots(figsize=(8, 6))
         data = mems[category_name]
 
