@@ -21,7 +21,6 @@ from synthesizer.instruments.instrument_base import (
     _hashable_state,
 )
 from synthesizer.instruments.utils import (
-    get_lsfs_from_resolving_power,
     read_instrument_attribute,
     write_instrument_attribute,
 )
@@ -72,11 +71,12 @@ class SpectroscopicInstrument(InstrumentBase):
             number of bins and sum to unity. They are in wavelength bins, so
             the spacing of lam should change slowly across a kernel; a
             wavelength array with a gap or a jump in spacing should be split
-            into separate instruments. If not given, Gaussian kernels are
-            made from resolving_power (if set) when the instrument is
-            created. The LSFs are prepared when the instrument is created,
-            so later changes to lsfs, lam or lsf_resample_factor are not
-            picked up.
+            into separate instruments. Gaussian kernels can be made from a
+            resolving power with get_lsfs_from_resolving_power. To give an
+            existing instrument its LSFs, or to change them, use set_lsfs:
+            the LSFs are prepared when they are set, so later changes to
+            the lsfs, lam or lsf_resample_factor attributes are not picked
+            up.
         resolving_power_lam (unyt_array, optional): Wavelength array
             corresponding to tabulated resolving_power values. Required
             when resolving_power is provided as an array.
@@ -132,9 +132,9 @@ class SpectroscopicInstrument(InstrumentBase):
                 kernels with shape (nwave, nkernel), sampled on the
                 instrument wavelength grid (or on bins lsf_resample_factor
                 times finer). If a 1D array is supplied, every wavelength
-                is assumed to have the same kernel. If not given, Gaussian
-                kernels are made from resolving_power (see
-                get_lsfs_from_resolving_power).
+                is assumed to have the same kernel. Gaussian kernels can
+                be made from a resolving power with
+                get_lsfs_from_resolving_power.
             resolving_power_lam (unyt_array, optional): Wavelength array
                 corresponding to tabulated resolving_power values. Required
                 when resolving_power is provided as an array.
@@ -150,35 +150,47 @@ class SpectroscopicInstrument(InstrumentBase):
         self.noise_maps = noise_maps
         self.resolving_power = resolving_power
         self.resolving_power_lam = resolving_power_lam
-        self.lsfs = None if lsfs is None else np.asarray(lsfs).copy()
         self.lsf_resample_factor = lsf_resample_factor
 
-        # A single LSF kernel is used at every wavelength
+        # Set the LSFs (this also validates the instrument)
+        self.set_lsfs(lsfs)
+
+    @timed("SpectroscopicInstrument.set_lsfs")
+    def set_lsfs(self, lsfs, lsf_resample_factor=None):
+        """Set the LSF kernels of the instrument.
+
+        This also sets the wavelength bins the LSFs are applied on,
+        so use this to give an existing instrument its LSFs or to
+        change them.
+
+        Args:
+            lsfs (array): Normalised line spread function kernels with
+                shape (nwave, nkernel). If a 1D array is supplied, every
+                wavelength is assumed to have the same kernel. None
+                removes the LSFs.
+            lsf_resample_factor (int, optional): The LSF supersampling
+                factor the kernels are sampled at. If not given, the
+                instrument keeps the factor it has.
+        """
+        # Store the kernels (a single LSF kernel is used at every
+        # wavelength)
+        self.lsfs = None if lsfs is None else np.asarray(lsfs).copy()
         if self.lsfs is not None and self.lsfs.ndim == 1:
             self.lsfs = np.tile(self.lsfs, (np.size(self.lam), 1))
+        if lsf_resample_factor is not None:
+            self.lsf_resample_factor = lsf_resample_factor
+
+        # Anything made for a previous set of LSFs is removed
+        self._lsf_bins = None
+        self._lsf_matrices = OrderedDict()
 
         SpectroscopicInstrument._validate(self)
-
-        # Without LSFs, make Gaussian ones from the resolving power if we
-        # have one
-        if self.lsfs is None and self.resolving_power is not None:
-            self.lsfs = get_lsfs_from_resolving_power(
-                self.lam,
-                self.resolving_power,
-                self.lsf_resample_factor,
-                self.resolving_power_lam,
-            )
 
         # Make the bins the LSFs are applied on and the matrix that collects
         # the light in them. They only depend on the instrument, so we make
         # them once here.
-        self._lsf_bins = None
         if self.lsfs is not None:
             self._lsf_bins = self._get_lsf_bins()
-
-        # The matrices that apply the LSFs to spectra, kept by the
-        # wavelengths of the spectra they were made for
-        self._lsf_matrices = OrderedDict()
 
     @timed("SpectroscopicInstrument._validate")
     def _validate(self):
@@ -456,7 +468,7 @@ class SpectroscopicInstrument(InstrumentBase):
         if self.lsfs is None or self._lsf_bins is None:
             raise exceptions.MissingArgument(
                 "No LSFs are set on this Instrument. Provide lsfs when "
-                "constructing the Instrument."
+                "constructing the Instrument, or set them with set_lsfs."
             )
 
         # Ensure we know which frame the instrument wavelengths are in
@@ -594,7 +606,7 @@ class SpectroscopicInstrument(InstrumentBase):
         just outside the array is collected by the elements at its ends.
 
         The bins only depend on the instrument, so this is called once,
-        when the instrument is created.
+        when the LSFs are set.
 
         Returns:
             tuple: The edges of the bins (np.ndarray, in the units of the

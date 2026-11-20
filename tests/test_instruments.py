@@ -2237,7 +2237,7 @@ def test_galaxy_spectroscopy_applies_lsf(quantity):
 
     # Once the instrument has no LSF, the spectroscopy stored with it is
     # discarded
-    instrument.lsfs = None
+    instrument.set_lsfs(None)
     get_spectroscopy(instrument)
     assert "spec" not in spectroscopy_lsf
 
@@ -2276,7 +2276,7 @@ def test_component_spectroscopy_applies_lsf_to_particle_spectra():
 
     # Once the instrument has no LSF, the spectroscopy stored with it is
     # discarded
-    instrument.lsfs = None
+    instrument.set_lsfs(None)
     Component._get_spectroscopy(component, instrument, "fnu")
     assert "spec" not in component.spectroscopy_lsf_fnu
     assert "spec" not in component.particle_spectroscopy_lsf_fnu
@@ -2335,26 +2335,38 @@ def test_resolving_power_table_must_cover_wavelengths():
         )
 
 
-def test_instrument_makes_lsfs_from_resolving_power():
-    """An instrument with a resolving power and no LSFs makes its own."""
+def test_set_lsfs_on_an_existing_instrument():
+    """LSFs set on an existing instrument should be applied."""
     lam = np.arange(10000.0, 12001.0, 10.0) * angstrom
+    sed = _observed_line_sed(1.0)
+
+    # A resolving power alone does not give an instrument an LSF
     instrument = SpectroscopicInstrument(
-        label="spec", lam=lam, resolving_power=500.0, lsf_resample_factor=4
+        label="spec", lam=lam, resolving_power=500.0
+    )
+    assert not instrument.can_do_lsf_spectroscopy
+
+    # Setting the LSFs made from it gives the same spectrum as passing
+    # them when the instrument is created
+    lsfs = get_lsfs_from_resolving_power(lam, 500.0, lsf_resample_factor=4)
+    instrument.set_lsfs(lsfs, lsf_resample_factor=4)
+    expected = SpectroscopicInstrument(
+        label="spec", lam=lam, lsfs=lsfs, lsf_resample_factor=4
+    )
+    assert instrument.lsf_resample_factor == 4
+    np.testing.assert_array_equal(
+        instrument.apply_lsf(sed, "observer").fnu,
+        expected.apply_lsf(sed, "observer").fnu,
     )
 
-    # It has the Gaussian kernels for its resolving power and resample
-    # factor, and so applies an LSF
-    np.testing.assert_allclose(
-        instrument.lsfs,
-        get_lsfs_from_resolving_power(lam, 500.0, lsf_resample_factor=4),
+    # Setting other LSFs replaces them
+    kernel = np.array([0.25, 0.5, 0.25])
+    instrument.set_lsfs(kernel, lsf_resample_factor=1)
+    np.testing.assert_array_equal(
+        instrument.apply_lsf(sed, "observer").fnu,
+        _lsf_instrument(kernel).apply_lsf(sed, "observer").fnu,
     )
-    assert instrument.can_do_lsf_spectroscopy
 
-    # LSFs that are passed in are used instead
-    instrument = SpectroscopicInstrument(
-        label="spec",
-        lam=lam,
-        resolving_power=500.0,
-        lsfs=np.tile([0.25, 0.5, 0.25], (lam.size, 1)),
-    )
-    assert instrument.lsfs.shape == (lam.size, 3)
+    # And None removes them
+    instrument.set_lsfs(None)
+    assert not instrument.can_do_lsf_spectroscopy

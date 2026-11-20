@@ -89,8 +89,9 @@ def get_lsfs_from_resolving_power(
 
     This function creates a Gaussian kernel for each wavelength in `lam`,
     with a FWHM of the wavelength divided by the resolving power there.
-    The kernels can be passed to a SpectroscopicInstrument as its `lsfs`,
-    together with the same `lsf_resample_factor`.
+    The kernels can be passed to a SpectroscopicInstrument as its `lsfs`
+    (or to its `set_lsfs` method), together with the same
+    `lsf_resample_factor`.
 
     Args:
         lam (unyt_array): The wavelengths of the instrument.
