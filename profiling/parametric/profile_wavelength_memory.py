@@ -99,11 +99,13 @@ def profile_wavelength_memory(
 
         for i in range(n_averages):
             for key, model in models.items():
+                # Anything the populations share is only counted once
                 size = 0
+                seen = set()
                 for p in pops:
                     p.spectra = {}
                     p.get_spectra(model, nthreads=nthreads)
-                    size += get_obj_size_manual(p.spectra)
+                    size += get_obj_size_manual(p.spectra, seen)
                 iter_mems[f"{key}, separate"].append(size / 1024**3)
 
                 combined.spectra = {}

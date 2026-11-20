@@ -49,11 +49,17 @@ def measure_pops(pops, func, attr):
             Called with each population, populating attr on it.
         attr (callable):
             Returns the object to measure from each population.
+
+    Returns:
+        float:
+            The size of the results in GB.
     """
+    # Anything the populations share is only counted once
     size = 0
+    seen = set()
     for p in pops:
         func(p)
-        size += get_obj_size_manual(attr(p))
+        size += get_obj_size_manual(attr(p), seen)
     return size / 1024 / 1024 / 1024  # Convert Bytes to GB
 
 
@@ -164,6 +170,8 @@ def profile_npops_memory(
             )
 
             # --- 2. Photometry Profiling ---
+            # Only the photometry itself is measured, not the filters the
+            # collection also holds
             for filters, nfilt in (
                 (filters_small, nfilt_small),
                 (filters_large, nfilt_large),
@@ -174,7 +182,7 @@ def profile_npops_memory(
                     measure_pops(
                         pops,
                         lambda p, f=filters: p.spectra["int"].get_photo_lnu(f),
-                        lambda p: p.spectra["int"].photo_lnu,
+                        lambda p: p.spectra["int"].photo_lnu.photo_lnu,
                     )
                 )
                 sed = combined.population_spectra["int"]
@@ -185,7 +193,7 @@ def profile_npops_memory(
                     measure_pops(
                         [combined],
                         lambda p, f=filters: sed.get_photo_lnu(f),
-                        lambda p: sed.photo_lnu,
+                        lambda p: sed.photo_lnu.photo_lnu,
                     )
                 )
 
