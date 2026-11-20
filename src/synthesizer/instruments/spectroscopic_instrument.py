@@ -5,6 +5,7 @@ dimensional spectroscopy. It stores a wavelength grid together with optional
 depth, signal-to-noise, and noise-map definitions.
 """
 
+from collections import OrderedDict
 from numbers import Real
 
 import h5py
@@ -73,7 +74,9 @@ class SpectroscopicInstrument(InstrumentBase):
             wavelength array with a gap or a jump in spacing should be split
             into separate instruments. If not given, Gaussian kernels are
             made from resolving_power (if set) when the instrument is
-            created.
+            created. The LSFs are prepared when the instrument is created,
+            so later changes to lsfs, lam or lsf_resample_factor are not
+            picked up.
         resolving_power_lam (unyt_array, optional): Wavelength array
             corresponding to tabulated resolving_power values. Required
             when resolving_power is provided as an array.
@@ -166,8 +169,16 @@ class SpectroscopicInstrument(InstrumentBase):
                 self.resolving_power_lam,
             )
 
-        # The bins the LSFs are applied on, kept from one use to the next
+        # Make the bins the LSFs are applied on and the matrix that collects
+        # the light in them. They only depend on the instrument, so we make
+        # them once here.
         self._lsf_bins = None
+        if self.lsfs is not None:
+            self._lsf_bins = self._get_lsf_bins()
+
+        # The matrices that apply the LSFs to spectra, kept by the
+        # wavelengths of the spectra they were made for
+        self._lsf_matrices = OrderedDict()
 
     @timed("SpectroscopicInstrument._validate")
     def _validate(self):
@@ -442,7 +453,7 @@ class SpectroscopicInstrument(InstrumentBase):
                 not been computed.
         """
         # Ensure the instrument actually has LSFs to apply
-        if self.lsfs is None:
+        if self.lsfs is None or self._lsf_bins is None:
             raise exceptions.MissingArgument(
                 "No LSFs are set on this Instrument. Provide lsfs when "
                 "constructing the Instrument."
@@ -474,13 +485,22 @@ class SpectroscopicInstrument(InstrumentBase):
         # both whichever frame the instrument wavelengths are in (as from
         # apply_lam_array_lnu and apply_lam_array_fnu), and one matrix
         # serves both, as the rest and observer frame wavelengths differ by
-        # a constant factor. NaNs in the fluxes are cleaned up.
-        lnu = _apply_lsf_matrix(lsf_matrix, sed._lnu)
-        lnu = lnu * get_quantity_unit(sed, "lnu")
+        # a constant factor. NaNs are cleaned up where those methods clean
+        # them up (we shouldn't get them, but a spectrum can hold them).
+        lnu = unyt_array(
+            _apply_lsf_matrix(lsf_matrix, sed._lnu),
+            get_quantity_unit(sed, "lnu"),
+            bypass_validation=True,
+        )
         fnu = None
         if sed.fnu is not None:
-            fnu = np.nan_to_num(_apply_lsf_matrix(lsf_matrix, sed._fnu))
-            fnu = fnu * get_quantity_unit(sed, "fnu")
+            fnu = unyt_array(
+                np.nan_to_num(
+                    _apply_lsf_matrix(lsf_matrix, sed._fnu), copy=False
+                ),
+                get_quantity_unit(sed, "fnu"),
+                bypass_validation=True,
+            )
 
         # Build the new SED as apply_lam_array_lnu and apply_lam_array_fnu do
         if frame == "observer":
@@ -488,7 +508,7 @@ class SpectroscopicInstrument(InstrumentBase):
                 self.lam, fnu, sed.redshift, rest_frame_lnu=lnu
             )
         else:
-            new_sed = Sed(self.lam, np.nan_to_num(lnu))
+            new_sed = Sed(self.lam, np.nan_to_num(lnu, copy=False))
             if fnu is not None:
                 new_sed.obslam = new_sed.lam * (1.0 + sed.redshift)
                 new_sed.obsnu = new_sed.nu / (1.0 + sed.redshift)
@@ -516,17 +536,15 @@ class SpectroscopicInstrument(InstrumentBase):
                 taking spectra per unit frequency on lam to spectra per unit
                 frequency on the instrument wavelengths.
         """
-        # The bins and the matrix that collects the light in them only
-        # depend on the instrument, so we keep them until its LSFs,
-        # wavelengths or resample factor change
-        made_from = (
-            self.lsfs.tobytes(),
-            self._lam.tobytes(),
-            self.lsf_resample_factor,
-        )
-        if self._lsf_bins is None or self._lsf_bins[0] != made_from:
-            self._lsf_bins = (made_from, *self._get_lsf_bins())
-        _, bin_edges, bin_matrix = self._lsf_bins
+        # If we have already made the matrix for these wavelengths, reuse it
+        key = lam.tobytes()
+        lsf_matrix = self._lsf_matrices.get(key)
+        if lsf_matrix is not None:
+            return lsf_matrix
+
+        # Get the bins the LSFs are applied on and the matrix that collects
+        # the light in them
+        bin_edges, bin_matrix = self._lsf_bins
 
         # Get the edges of the spectra's own wavelength bins, which lie
         # midway between their wavelengths
@@ -556,7 +574,14 @@ class SpectroscopicInstrument(InstrumentBase):
             shape=(bin_edges.size - 1, lam.size),
         )
 
-        return bin_matrix @ light_matrix
+        # Keep the matrix for later spectra on the same wavelengths, holding
+        # on to no more than the eight made most recently
+        lsf_matrix = bin_matrix @ light_matrix
+        self._lsf_matrices[key] = lsf_matrix
+        while len(self._lsf_matrices) > 8:
+            self._lsf_matrices.popitem(last=False)
+
+        return lsf_matrix
 
     @timed("SpectroscopicInstrument._get_lsf_bins")
     def _get_lsf_bins(self):
@@ -567,6 +592,9 @@ class SpectroscopicInstrument(InstrumentBase):
         of the array as far as the kernels reach. Each element collects the
         light in the bins around it with its own kernel, so the light from
         just outside the array is collected by the elements at its ends.
+
+        The bins only depend on the instrument, so this is called once,
+        when the instrument is created.
 
         Returns:
             tuple: The edges of the bins (np.ndarray, in the units of the

@@ -2138,18 +2138,28 @@ def test_apply_lsf_uses_matching_frame(frame, quantity, scale, frame_lam):
     np.testing.assert_allclose(line.sum(), plain_line[100], rtol=1e-3)
 
 
-def test_apply_lsf_follows_changes_to_the_lsfs():
-    """apply_lsf should use the LSFs the instrument has when it is called."""
+def test_apply_lsf_reuses_its_matrix_for_the_same_wavelengths():
+    """The matrix applying the LSF is reused for the same wavelengths only."""
+    instrument = _lsf_instrument(np.array([0.25, 0.5, 0.25]))
     sed = _observed_line_sed(1.0)
-    instrument = _lsf_instrument(np.array([0.0, 1.0, 0.0]))
-    narrow = instrument.apply_lsf(sed, "observer")
 
-    # Replace the kernels with broader ones on the same instrument
-    instrument.lsfs = np.tile([0.25, 0.5, 0.25], (instrument.lam.size, 1))
-    broad = instrument.apply_lsf(sed, "observer")
+    # Spectra on the same wavelengths share one matrix
+    matrix = instrument._get_lsf_matrix(sed._obslam)
+    assert instrument._get_lsf_matrix(sed._obslam.copy()) is matrix
 
-    # The line is now spread over its neighbours
-    np.testing.assert_allclose(broad.fnu[100], narrow.fnu[100] / 2, rtol=1e-2)
+    # Spectra on other wavelengths get their own, and so the same
+    # spectroscopy as from an instrument that has been used for nothing else
+    other = _observed_line_sed(1.01)
+    unused = _lsf_instrument(np.array([0.25, 0.5, 0.25]))
+    np.testing.assert_array_equal(
+        instrument.apply_lsf(other, "observer").fnu,
+        unused.apply_lsf(other, "observer").fnu,
+    )
+
+    # No more than eight matrices are kept
+    for z in np.arange(1.02, 1.11, 0.01):
+        instrument._get_lsf_matrix(_observed_line_sed(z)._obslam)
+    assert len(instrument._lsf_matrices) == 8
 
 
 def test_apply_lsf_errors():
