@@ -390,6 +390,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                 fov=fov,
                 lam=self.lam,
                 quantity=quantity,
+                nthreads=nthreads,
             )
 
         return self._generate_particle_component_cube(
@@ -485,6 +486,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         fov,
         lam,
         quantity="lnu",
+        nthreads=1,
     ):
         """Generate a data cube for one parametric component.
 
@@ -495,6 +497,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             fov (unyt_quantity): Width of the requested data cube.
             lam (unyt_array): Wavelength array defining the cube sampling.
             quantity (str): Spectral quantity to store in the cube.
+            nthreads (int): Number of threads to use.
 
         Returns:
             SpectralCube: Generated spectral data cube for the component.
@@ -510,10 +513,11 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                 quantity=quantity,
                 density_grid=None,
                 morphology=component.morphology,
+                nthreads=nthreads,
             )
 
         density_grid = component.morphology.get_density_grid(
-            self.resolution, cube.npix
+            self.resolution, cube.npix, nthreads=nthreads
         )
         cube.generate_data_cube_smoothed(
             sed=sed,
