@@ -704,14 +704,7 @@ class TestBimodalPacmanEmission:
         )
 
         # Generate spectra
-        spec = random_part_stars.get_spectra(model)
-
-        # Now check that passing an override to get_spectra works
-        with_fesc_spec = random_part_stars.get_spectra(model, fesc=0.1)
-
-        assert not np.isclose(spec.lnu.sum(), with_fesc_spec.lnu.sum()), (
-            "fesc override had no effect"
-        )
+        random_part_stars.get_spectra(model)
 
         expected_keys = []
         for key in model._models.keys():

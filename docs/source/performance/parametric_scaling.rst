@@ -12,7 +12,7 @@ The following plots show how the runtime of individual operations scales with th
 
 **Construction**
 
-Building the populations from SFH and metallicity distribution functions, from binned SFZH arrays (``Stars.from_sfzh``), and combining them into a single ``Stars``.
+Building the populations from SFH and metallicity distribution functions, from binned SFZH arrays (the ``sfzh`` argument), and combining them into a single ``Stars``.
 
 .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/parametric/parametric_npops_performance_construction_nlam9244_nt32.png
    :width: 75%

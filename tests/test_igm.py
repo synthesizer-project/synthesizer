@@ -184,3 +184,46 @@ def test_igm_equality():
     modified = Madau96()
     modified.coefficients[0] *= 2
     assert Madau96() != modified
+
+
+def test_igm_transmission_cache(lam):
+    """The transmission is reused only for matching inputs."""
+    from types import SimpleNamespace
+
+    from synthesizer.emission_models.attenuation import (
+        Asada25,
+        Inoue14,
+        Madau96,
+    )
+
+    for igm in (Inoue14(), Madau96(), Asada25()):
+        # Matching inputs return the same read-only array
+        first = igm.get_transmission(7.0, lam)
+        assert igm.get_transmission(7.0, lam.copy()) is first
+        assert not first.flags.writeable
+
+        # An equal IGM (e.g. passing the class to get_fnu) shares the cache
+        assert type(igm)().get_transmission(7.0, lam) is first
+
+        # A different redshift or wavelength array is recomputed
+        params = igm._get_igm_params(None)
+        other_z = igm.get_transmission(6.0, lam)
+        assert other_z is not first
+        np.testing.assert_array_equal(
+            other_z, igm._compute_transmission(6.0, lam, params)
+        )
+        other_lam = igm.get_transmission(6.0, lam[::2])
+        np.testing.assert_array_equal(
+            other_lam, igm._compute_transmission(6.0, lam[::2], params)
+        )
+
+    # A different parameter on the emitter is recomputed
+    igm = Inoue14()
+    default = igm.get_transmission(3.0, lam)
+    scaled = igm.get_transmission(
+        3.0, lam, emitter=SimpleNamespace(scale_tau=2.0)
+    )
+    assert scaled is not default
+    np.testing.assert_allclose(
+        scaled, Inoue14(scale_tau=2.0).get_transmission(3.0, lam)
+    )

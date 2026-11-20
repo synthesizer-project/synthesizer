@@ -20,7 +20,8 @@ from synthesizer.instruments.utils import (
     read_instrument_attribute,
     write_instrument_attribute,
 )
-from synthesizer.units import Quantity, accepts
+from synthesizer.synth_warnings import deprecated
+from synthesizer.units import Quantity, accepts, deepcopy_with_shared_units
 from synthesizer.utils.operation_timers import timed
 
 
@@ -46,16 +47,27 @@ class SpectroscopicInstrument(InstrumentBase):
             this should be a dictionary keyed by the relevant labels.
         noise_maps (unyt_array, optional): An optional array with noise as a
             function of wavelength, in the same units as the spectral noise.
-        resolving_power (float or callable, optional): Resolving power
-            (R = lambda / delta_lambda) of the instrument. May be a constant
-            or a function of wavelength. Only a constant (float/int) value is
-            persisted by :meth:`to_hdf5`; a callable resolving power cannot be
-            serialised to HDF5 and is silently dropped on save (it is not
-            restored on load either, since there is nothing to restore it
+        resolving_power (float or callable or array, optional): Resolving
+            power (R = lambda / delta_lambda) of the instrument. May be a
+            constant or a function of wavelength or an array as a function of
+            wavelength (resolving_power_lam must be supplied). Constants and
+            arrays are persisted by :meth:`to_hdf5`; a callable resolving power
+            cannot be serialised to HDF5 and is silently dropped on save (it is
+            not restored on load either, since there is nothing to restore it
             from).
+        lsfs (array, optional): Normalised line spread function kernels
+            with shape (nwave, nkernel). Each row corresponds to a
+            wavelength in lam. Kernels must have an odd number of bins
+            and sum to unity.
+        resolving_power_lam (unyt_array, optional): Wavelength array
+            corresponding to tabulated resolving_power values. Required
+            when resolving_power is provided as an array.
     """
 
     lam = Quantity("wavelength")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(lam=angstrom)
     @timed("SpectroscopicInstrument.__init__")
@@ -68,6 +80,8 @@ class SpectroscopicInstrument(InstrumentBase):
         snrs=None,
         noise_maps=None,
         resolving_power=None,
+        lsfs=None,
+        resolving_power_lam=None,
     ):
         """Initialise a spectroscopic instrument.
 
@@ -88,10 +102,16 @@ class SpectroscopicInstrument(InstrumentBase):
             noise_maps (unyt_array, optional): An optional array with noise as
                 a function of wavelength, in the same units as the spectral
                 noise.
-            resolving_power (float or callable, optional): Resolving power
-                (R = lambda / delta_lambda) of the instrument. May be a
-                constant or a function of wavelength. Only a constant value is
-                persisted when the instrument is saved to HDF5.
+            resolving_power (float or callable or array, optional): Resolving
+                power (R = lambda / delta_lambda) of the instrument.
+                May be a constant, array, or function of wavelength. Constants
+                and arrays are persisted when the instrument is saved to HDF5.
+            lsfs (unyt_array, optional): Normalised line spread function
+                kernels with shape (nwave, nkernel), sampled on the
+                instrument wavelength grid.
+            resolving_power_lam (unyt_array, optional): Wavelength array
+                corresponding to tabulated resolving_power values. Required
+                when resolving_power is provided as an array.
         """
         super().__init__(label)
         self.lam = lam
@@ -100,6 +120,8 @@ class SpectroscopicInstrument(InstrumentBase):
         self.snrs = snrs
         self.noise_maps = noise_maps
         self.resolving_power = resolving_power
+        self.resolving_power_lam = resolving_power_lam
+        self.lsfs = None if lsfs is None else np.asarray(lsfs).copy()
         SpectroscopicInstrument._validate(self)
 
     @timed("SpectroscopicInstrument._validate")
@@ -136,14 +158,86 @@ class SpectroscopicInstrument(InstrumentBase):
         if self.resolving_power is not None and not callable(
             self.resolving_power
         ):
-            if (
+            if isinstance(self.resolving_power, np.ndarray):
+                if self.resolving_power_lam is None:
+                    raise exceptions.MissingArgument(
+                        "resolving_power_lam is required when resolving_power "
+                        "is an array."
+                    )
+
+                if self.resolving_power.ndim != 1:
+                    raise exceptions.InconsistentArguments(
+                        "resolving_power must be a one-dimensional array."
+                    )
+
+                if np.ndim(self.resolving_power_lam) != 1:
+                    raise exceptions.InconsistentArguments(
+                        "resolving_power_lam must be a one-dimensional "
+                        "wavelength array."
+                    )
+
+                if len(self.resolving_power) != len(self.resolving_power_lam):
+                    raise exceptions.InconsistentArguments(
+                        "resolving_power and resolving_power_lam must have "
+                        "the same length."
+                    )
+
+                if (
+                    not np.issubdtype(self.resolving_power.dtype, np.number)
+                    or not np.all(np.isfinite(self.resolving_power))
+                    or np.any(self.resolving_power <= 0)
+                ):
+                    raise exceptions.InconsistentArguments(
+                        "resolving_power must contain only positive, finite "
+                        "values."
+                    )
+            elif (
                 isinstance(self.resolving_power, bool)
                 or not isinstance(self.resolving_power, Real)
                 or not np.isfinite(self.resolving_power)
                 or self.resolving_power <= 0
             ):
                 raise exceptions.InconsistentArguments(
-                    "resolving_power must be a positive number or callable."
+                    "resolving_power must be a positive number, array, or "
+                    "callable."
+                )
+
+        # Validate the LSF kernels
+        if self.lsfs is not None:
+            if self.lsfs.ndim != 2:
+                raise exceptions.InconsistentArguments(
+                    "LSFs must be a 2D array with shape (nwave, nkernel)."
+                )
+
+            if self.lsfs.shape[0] != len(self.lam):
+                raise exceptions.InconsistentArguments(
+                    "The number of LSFs must match the instrument "
+                    "wavelength grid."
+                )
+
+            if self.lsfs.shape[1] < 1 or self.lsfs.shape[1] % 2 == 0:
+                raise exceptions.InconsistentArguments(
+                    "LSF kernels must have an odd, non-zero length."
+                )
+
+            if not np.issubdtype(self.lsfs.dtype, np.floating):
+                raise exceptions.InconsistentArguments(
+                    "LSFs must have a floating-point dtype."
+                )
+
+            if not np.all(np.isfinite(self.lsfs)):
+                raise exceptions.InconsistentArguments(
+                    "LSFs must contain only finite values."
+                )
+
+            if np.any(self.lsfs < 0):
+                raise exceptions.InconsistentArguments(
+                    "LSF kernel weights must be non-negative."
+                )
+
+            if not np.allclose(self.lsfs.sum(axis=1), 1.0, rtol=0, atol=1e-6):
+                raise exceptions.InconsistentArguments(
+                    "Each LSF kernel must be normalised to unity."
                 )
 
     @property
@@ -168,6 +262,15 @@ class SpectroscopicInstrument(InstrumentBase):
         Returns:
             tuple: Hashable representation of the instrument state.
         """
+        # Keep every resolving-power grid coordinate. The generic numeric
+        # state helper intentionally uses a compact fingerprint, which can
+        # make grids with different interior wavelengths compare equal.
+        resolving_power_lam_state = (
+            None
+            if self.resolving_power_lam is None
+            else tuple(self.resolving_power_lam.to_value("angstrom"))
+        )
+
         return (
             _hashable_state(self._lam),
             _hashable_state(self.depth),
@@ -175,17 +278,66 @@ class SpectroscopicInstrument(InstrumentBase):
             _hashable_state(self.snrs),
             _hashable_state(self.noise_maps),
             _hashable_state(self.resolving_power),
+            resolving_power_lam_state,
+            _hashable_state(self.lsfs),
         )
 
+    @timed("SpectroscopicInstrument.apply_lam_array_lnu")
+    def apply_lam_array_lnu(self, sed, nthreads=1):
+        """Apply the instrument wavelength array in the rest frame.
+
+        The instrument wavelengths are interpreted as rest frame wavelengths,
+        so the luminosities are resampled directly onto them. Any fluxes are
+        resampled onto the matching observer frame wavelengths,
+        instrument.lam * (1 + redshift).
+
+        Args:
+            sed (Sed): Spectral energy distribution to resample.
+            nthreads (int): Number of threads to use in the low-level
+                resampling call. Currently unused.
+
+        Returns:
+            Sed: New SED resampled onto the instrument wavelength grid in the
+                rest frame.
+        """
+        # Delegate the low-level rest frame resampling to the SED
+        return sed.get_resampled_sed(new_lam=self.lam)
+
+    @timed("SpectroscopicInstrument.apply_lam_array_fnu")
+    def apply_lam_array_fnu(self, sed, nthreads=1):
+        """Apply the instrument wavelength array in the observer frame.
+
+        The instrument wavelengths are interpreted as observer frame
+        wavelengths, so the fluxes are resampled directly onto them and the
+        observer frame wavelengths of the result are exactly the instrument's.
+        The luminosities are resampled onto the matching rest frame
+        wavelengths, instrument.lam / (1 + redshift).
+
+        Args:
+            sed (Sed): Spectral energy distribution to observe. Its fluxes
+                must already have been computed (e.g. with Sed.get_fnu).
+            nthreads (int): Number of threads to use in the low-level
+                resampling call. Currently unused.
+
+        Returns:
+            Sed: New SED resampled onto the instrument wavelength grid in the
+                observer frame.
+        """
+        # Delegate the low-level observer frame resampling to the SED
+        return sed.get_resampled_observed_sed(self.lam)
+
+    @deprecated(
+        "is deprecated and will be removed in version 1.4.0. "
+        "It is an alias for instrument.apply_lam_array_fnu(...) (observer "
+        "frame); use that, or instrument.apply_lam_array_lnu(...) for the "
+        "rest frame, instead."
+    )
     @timed("SpectroscopicInstrument.apply_lam_array")
     def apply_lam_array(self, sed, nthreads=1):
         """Apply the instrument wavelength array to an SED.
 
-        This method is the instrument-owned entry point for applying the
-        spectroscopic wavelength definition to an SED. At present it remains a
-        thin wrapper around the existing SED resampling primitive so the
-        instrument owns the wavelength-application policy while the SED still
-        performs the low-level resampling.
+        Deprecated alias for apply_lam_array_fnu, which treats the instrument
+        wavelengths as observer frame wavelengths.
 
         Args:
             sed (Sed): Spectral energy distribution to observe.
@@ -195,10 +347,8 @@ class SpectroscopicInstrument(InstrumentBase):
         Returns:
             Sed: New SED resampled onto the instrument wavelength grid.
         """
-        # Delegate the low-level resampling to the existing SED helper while
-        # making the instrument the owner of the wavelength-application entry
-        # point
-        return sed.apply_instrument_lams(self, nthreads=nthreads)
+        # Defer to the observer frame version
+        return self.apply_lam_array_fnu(sed, nthreads=nthreads)
 
     @timed("SpectroscopicInstrument.apply_noise")
     def apply_noise(self, spectrum, **kwargs):
@@ -236,21 +386,33 @@ class SpectroscopicInstrument(InstrumentBase):
         group.attrs["label"] = self.label
         group.attrs["instrument_type"] = self.instrument_type
 
-        # Only a constant resolving power can be represented as an HDF5
-        # attribute; a callable resolving_power(wavelength) is not
-        # serialisable and is intentionally dropped here. NumPy scalars count
-        # as constants: np.float32 and np.int64 are not instances of float or
-        # int, so testing those alone would silently discard a resolving
-        # power that came out of an array.
-        if isinstance(self.resolving_power, Real) and not isinstance(
+        # A callable resolving_power(wavelength) is not serialisable and is
+        # intentionally dropped here. NumPy scalars count as constants:
+        # np.float32 and np.int64 are not instances of float or int, so
+        # testing those alone would silently discard a resolving power that
+        # came out of an array.
+        if isinstance(self.resolving_power, np.ndarray):
+            ds = group.create_dataset(
+                "ResolvingPower", data=self.resolving_power, dtype=float
+            )
+            ds.attrs["units"] = "dimensionless"
+
+            write_instrument_attribute(
+                group, "ResolvingPowerWavelength", self.resolving_power_lam
+            )
+        elif isinstance(self.resolving_power, Real) and not isinstance(
             self.resolving_power, bool
         ):
             group.attrs["resolving_power"] = float(self.resolving_power)
 
         ds = group.create_dataset(
-            "Wavelength", data=self.lam.value, dtype=float
+            "Wavelength", data=self.lam.ndview, dtype=float
         )
         ds.attrs["units"] = str(self.lam.units)
+
+        if self.lsfs is not None:
+            ds = group.create_dataset("LSFs", data=self.lsfs)
+            ds.attrs["units"] = "dimensionless"
 
         write_instrument_attribute(group, "Depth", self.depth)
         write_instrument_attribute(
@@ -298,6 +460,20 @@ class SpectroscopicInstrument(InstrumentBase):
 
         noise_maps = read_instrument_attribute(group, "NoiseMaps")
 
+        if "LSFs" in group:
+            lsfs = group["LSFs"][...]
+        else:
+            lsfs = None
+
+        if "ResolvingPower" in group:
+            resolving_power = group["ResolvingPower"][...]
+            resolving_power_lam = read_instrument_attribute(
+                group, "ResolvingPowerWavelength"
+            )
+        else:
+            resolving_power = group.attrs.get("resolving_power")
+            resolving_power_lam = None
+
         payload = {
             "label": group.attrs["label"],
             "lam": lam,
@@ -305,7 +481,9 @@ class SpectroscopicInstrument(InstrumentBase):
             "depth_app_radius": depth_app_radius,
             "snrs": snrs,
             "noise_maps": noise_maps,
-            "resolving_power": group.attrs.get("resolving_power"),
+            "resolving_power": resolving_power,
+            "resolving_power_lam": resolving_power_lam,
+            "lsfs": lsfs,
         }
         payload.update(kwargs)
 
@@ -317,4 +495,6 @@ class SpectroscopicInstrument(InstrumentBase):
             snrs=payload["snrs"],
             noise_maps=payload["noise_maps"],
             resolving_power=payload["resolving_power"],
+            resolving_power_lam=payload["resolving_power_lam"],
+            lsfs=payload["lsfs"],
         )

@@ -6,7 +6,7 @@ component.
 
 Example usage::
 
-    stars = Stars(log10ages, metallicities, sf_hist=sfh, metal_dist=zdist)
+    stars = Stars(log10ages, metallicities, sfzh=sfzh)
     stars.get_spectra(emission_model)
     stars.plot_spectra()
 """
@@ -29,23 +29,18 @@ from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
 from synthesizer.emission_models.utils import get_param
 from synthesizer.grid import Grid
-from synthesizer.parametric.bin_mask import (
-    BinMask,
-    rebin_axis,
-    to_axis_threshold,
-    union_edges,
-)
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.morphology import (
     PerPopulation,
     PopulationMorphology,
 )
 from synthesizer.parametric.sf_hist import Common as SFHCommon
-from synthesizer.synth_warnings import deprecation, warn
-from synthesizer.units import Quantity, accepts
+from synthesizer.synth_warnings import warn
+from synthesizer.units import Quantity, accepts, convert_in_place
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.stats import weighted_mean, weighted_median
+from synthesizer.utils.util_funcs import get_attr_unit_conversion
 
 # The number of bins each interval between axis points is split into when
 # binning an SFH or metallicity distribution function. Mass is uniform within
@@ -57,6 +52,100 @@ SFZH_SUBDIVISIONS = 8
 # The number of pieces each age bin is split into to average an age dependent
 # distribution (e.g. Z(t)) over the mass formed within the bin
 AGE_DEPENDENCE_SAMPLES = 8
+
+# The bound used for an open end of a mask's range. The extensions are
+# compiled with -ffast-math, which makes infinities undefined behaviour, so
+# masks use the largest finite float instead
+_MASK_BOUND = np.finfo(np.float64).max
+
+
+def union_edges(edges, other_edges):
+    """Get the union of two sets of bin edges.
+
+    A value repeated in either set (i.e. a zero width bin) is repeated in the
+    union as many times as in the set repeating it most, so every bin of
+    both sets can be rebuilt from bins of the union.
+
+    Args:
+        edges (np.ndarray of float):
+            The first (non-decreasing) bin edges.
+        other_edges (np.ndarray of float):
+            The second (non-decreasing) bin edges.
+
+    Returns:
+        np.ndarray of float:
+            The union of the edges.
+    """
+    values = np.union1d(edges, other_edges)
+
+    def count(arr):
+        return np.searchsorted(arr, values, "right") - np.searchsorted(
+            arr, values, "left"
+        )
+
+    return np.repeat(
+        values, np.maximum(np.maximum(count(edges), count(other_edges)), 1)
+    )
+
+
+def rebin_axis(masses, axis, edges, new_edges):
+    """Rebin masses along one axis onto finer edges.
+
+    The new edges must contain every one of the old edges (e.g. the union
+    of two sets of edges), so every new bin lies within a single old bin. A
+    finite bin's mass is uniform within it, so each new finite bin takes the
+    fraction of its old bin's mass given by their widths. A zero width bin's
+    mass moves to the zero width bin at the same value (the first to the
+    first, the second to the second and so on when a value has several).
+
+    Args:
+        masses (np.ndarray):
+            The masses.
+        axis (int):
+            The axis of masses to rebin.
+        edges (np.ndarray of float):
+            The current bin edges along that axis.
+        new_edges (np.ndarray of float):
+            The new bin edges along that axis.
+
+    Returns:
+        np.ndarray:
+            The rebinned masses.
+    """
+    lo, hi = edges[:-1], edges[1:]
+    new_lo, new_hi = new_edges[:-1], new_edges[1:]
+    nbins = lo.size
+
+    # Find the old bin holding each new finite bin (searching to the right
+    # of any repeated edge lands in the finite bin after a zero width one)
+    source = np.searchsorted(edges, new_lo, side="right") - 1
+    inside = (source >= 0) & (source < nbins) & (new_hi > new_lo)
+    source = np.clip(source, 0, nbins - 1)
+    inside &= (hi[source] > lo[source]) & (new_hi <= hi[source])
+    fraction = np.where(
+        inside,
+        (new_hi - new_lo) / np.where(inside, hi[source] - lo[source], 1.0),
+        0.0,
+    )
+
+    # Zero width bins take the mass of the zero width bin at the same value.
+    # A value can have several zero width bins (e.g. every bin clipped to
+    # an age of zero), so the nth new one at a value takes the nth old one
+    points = np.flatnonzero(lo == hi)
+    new_points = np.flatnonzero(new_lo == new_hi)
+    if points.size > 0:
+        values, new_values = lo[points], new_lo[new_points]
+        rank = np.arange(new_values.size) - np.searchsorted(
+            new_values, new_values
+        )
+        matches = np.searchsorted(values, new_values) + rank
+        found = matches < np.searchsorted(values, new_values, side="right")
+        source[new_points[found]] = points[matches[found]]
+        fraction[new_points[found]] = 1.0
+
+    shape = [1] * masses.ndim
+    shape[axis] = fraction.size
+    return np.take(masses, source, axis=axis) * fraction.reshape(shape)
 
 
 class Stars(StarsComponent):
@@ -89,9 +178,8 @@ class Stars(StarsComponent):
             stellar population's morphology. This can be any of the family
             of morphology classes from synthesizer.morphology.
         sfzh (np.ndarray of float):
-            Deprecated, use Stars.from_sfzh. The mass formed at each (age,
-            metallicity) point. If provided all following arguments are
-            ignored.
+            The mass formed at each (age, metallicity) point. If provided
+            all following arguments are ignored.
         sf_hist (np.ndarray of float):
             An array describing the star formation history.
         metal_dist (np.ndarray of float):
@@ -152,7 +240,7 @@ class Stars(StarsComponent):
         """Initialise the parametric stellar population.
 
         Can either be instantiated by:
-        - Passing a SFZH grid explictly (deprecated, use Stars.from_sfzh).
+        - Passing a SFZH grid explictly.
         - Passing instant_sf and instant_metallicity to get an instantaneous
           SFZH.
         - Passing functions that describe the SFH and ZH.
@@ -181,10 +269,8 @@ class Stars(StarsComponent):
                 stellar population's morphology. This can be any of the family
                 of morphology classes from synthesizer.morphology.
             sfzh (np.ndarray of float):
-                Deprecated, use Stars.from_sfzh (or Stars.from_binned for
-                bins that don't sit on the axes). The mass formed at each
-                (age, metallicity) point. If provided all following arguments
-                are ignored.
+                The mass formed at each (age, metallicity) point. If provided
+                all following arguments are ignored.
             sf_hist (float/unyt_quantity/np.ndarray of float/SFH.*):
                 Either:
                     - An age at which to compute an instantaneous SFH, i.e. all
@@ -218,16 +304,6 @@ class Stars(StarsComponent):
                 Arbitrary keyword arguments to be set as attributes on the
                 Stars instance.
         """
-        # Passing an SFZH is deprecated in favour of from_sfzh (which passes
-        # it privately)
-        if sfzh is not None:
-            deprecation(
-                "Passing sfzh to Stars is deprecated, use "
-                "Stars.from_sfzh(log10ages, metallicities, sfzh) instead "
-                "(or Stars.from_binned for bins that don't sit on the axes)."
-            )
-        sfzh = kwargs.pop("_point_sfzh", sfzh)
-
         # Instantiate the parent
         StarsComponent.__init__(
             self,
@@ -358,13 +434,11 @@ class Stars(StarsComponent):
             self.stellar_fraction = grid.stellar_fraction
 
         # Get the bins describing the population, either from an explicit
-        # SFZH (defined at the points of the axes, which we copy so
-        # normalising doesn't modify the caller's array) or from the SFH and
-        # metallicity distribution
+        # SFZH (defined at the points of the axes) or from the SFH and
+        # metallicity distribution. Either way the masses are a new array,
+        # so normalising them in place never touches the caller's SFZH
         if sfzh is not None:
-            edges, masses = self._get_point_bins(
-                np.array(sfzh, dtype=np.float64)
-            )
+            edges, masses = self._sfzh_to_bins(sfzh)
         else:
             edges, masses = self._get_bins()
 
@@ -413,14 +487,14 @@ class Stars(StarsComponent):
             self.sfzh_normalisation = (
                 self._surviving_mass / current_surviving_mass
             )
-            masses = masses * self.sfzh_normalisation
+            masses *= self.sfzh_normalisation
 
             # now calculate the initial mass
             self.initial_mass = (np.sum(masses) * Msun).in_base("galactic")
 
         elif self.initial_mass is not None:
             self.sfzh_normalisation = self._initial_mass / np.sum(masses)
-            masses = masses * self.sfzh_normalisation
+            masses *= self.sfzh_normalisation
 
         else:
             # Otherwise calculate the total initial mass by just summing the
@@ -481,8 +555,12 @@ class Stars(StarsComponent):
             np.ndarray of float:
                 The bin edges.
         """
+        # The fractional position of each subdivision within an interval
         nodes = np.asarray(nodes, dtype=np.float64)
         steps = np.arange(SFZH_SUBDIVISIONS) / SFZH_SUBDIVISIONS
+
+        # Subdivide each interval, in log space when every node is positive
+        # (the grids' axes are log spaced) and linearly otherwise
         if nodes[0] > 0:
             log_nodes = np.log10(nodes)
             fine = 10 ** (
@@ -490,34 +568,41 @@ class Stars(StarsComponent):
             )
         else:
             fine = nodes[:-1, None] + np.diff(nodes)[:, None] * steps
+
+        # Only breakpoints strictly inside (0, last node) add new edges
         breakpoints = np.asarray(breakpoints, dtype=np.float64)
         breakpoints = breakpoints[
             (breakpoints > 0) & (breakpoints < nodes[-1])
         ]
+
+        # Combine everything into sorted, unique edges starting at zero and
+        # ending at the last node
         return np.unique(
             np.concatenate(([0.0], fine.ravel(), [nodes[-1]], breakpoints))
         )
 
     @staticmethod
-    def _get_points_as_bins(nodes, values):
-        """Get zero width bins at a set of points.
+    def _points_to_bins(points, point_masses):
+        """Convert masses at a set of points along one axis into bins.
 
-        Each point becomes a zero width bin, with (empty) finite bins
-        between them.
+        Each point becomes a zero width bin holding its mass, with an empty
+        finite bin between each pair of points.
 
         Args:
-            nodes (np.ndarray of float):
+            points (np.ndarray of float):
                 The (linear) points.
-            values (np.ndarray of float):
+            point_masses (np.ndarray of float):
                 The mass at each point.
 
         Returns:
             tuple:
                 The bin edges and the mass in each bin.
         """
-        masses = np.zeros(2 * len(nodes) - 1)
-        masses[::2] = values
-        return np.repeat(np.asarray(nodes, dtype=np.float64), 2), masses
+        # Repeating each point gives a zero width bin at every even index
+        # with an empty finite bin between each pair of points
+        masses = np.zeros(2 * len(points) - 1)
+        masses[::2] = point_masses
+        return np.repeat(np.asarray(points, dtype=np.float64), 2), masses
 
     def _get_age_bins(self, offset):
         """Get the age bins and the mass formed in each.
@@ -529,8 +614,13 @@ class Stars(StarsComponent):
         Returns:
             tuple:
                 The age bin edges (in years) and the mass in each bin.
+
+        Raises:
+            InconsistentArguments:
+                If no SFH has been defined.
         """
-        ages = self.ages.to("yr").ndview
+        # Work with the ages in years
+        ages = convert_in_place(self.ages, yr).ndview
 
         # An SFH function is integrated exactly over fine bins of the axis
         if self.sf_hist_func is not None:
@@ -541,13 +631,14 @@ class Stars(StarsComponent):
 
         # An instantaneous SFH is a single point
         if self._instant_sf is not None:
-            age = self._instant_sf.to("yr").value + offset
+            age = convert_in_place(self._instant_sf, yr).value + offset
             return np.array([age, age]), np.array([1.0])
 
         # An array is defined at the points of the axis
         if self.sf_hist is not None:
-            return self._get_points_as_bins(ages, self.sf_hist)
+            return self._points_to_bins(ages, self.sf_hist)
 
+        # Without any of the above we have no SFH
         raise exceptions.InconsistentArguments(
             "A method for defining both the SFH and ZH must be provided!\n"
             "For each either an instantaneous"
@@ -560,7 +651,12 @@ class Stars(StarsComponent):
         Returns:
             tuple:
                 The metallicity bin edges and the weight in each bin.
+
+        Raises:
+            InconsistentArguments:
+                If no metallicity distribution has been defined.
         """
+        # Work with the metallicities as a plain float array
         metals = np.asarray(self.metallicities, dtype=np.float64)
 
         # A delta function is a single point
@@ -583,24 +679,21 @@ class Stars(StarsComponent):
 
         # An array is defined at the points of the axis
         if self.metal_dist is not None:
-            return self._get_points_as_bins(metals, self.metal_dist)
+            return self._points_to_bins(metals, self.metal_dist)
 
+        # Without any of the above we have no metallicity distribution
         raise exceptions.InconsistentArguments(
             "A method for defining both the SFH and ZH must be provided!\n"
             "For each either an instantaneous"
             " value, a SFH/ZH object, or an array must be passed"
         )
 
-    def _get_bins(self, age_offset=None):
+    @timed("ParametricStars._get_bins")
+    def _get_bins(self):
         """Get the bins describing the population from the SFH and ZH.
 
         The SFH and metallicity distribution are binned separately and the
         population is their product.
-
-        Args:
-            age_offset (unyt_quantity):
-                The offset to apply to the ages, e.g. to get the population
-                at an earlier time.
 
         Returns:
             tuple:
@@ -613,26 +706,43 @@ class Stars(StarsComponent):
         ):
             self._instant_sf = self._instant_sf * self.ages.units
 
-        offset = 0.0 if age_offset is None else age_offset.to("yr").value
-        age_edges, age_masses = self._get_age_bins(offset)
+        # Bin the ages
+        age_edges, age_masses = self._get_age_bins(0.0)
 
         # A metallicity distribution that depends on age is averaged over
         # the mass formed in each age bin, so it differs between age bins
         dist = self.metal_dist_func
         if dist is not None and dist.depends_on_age:
             metals = np.asarray(self.metallicities, dtype=np.float64)
-            ages, weights = self._get_age_samples(
-                age_edges, self.sf_hist_func, offset
-            )
+            ages, weights = self._get_age_samples(age_edges, self.sf_hist_func)
             if dist.name == "DeltaConstant":
                 # Each metallicity is a point, split linearly between the
                 # points of a fine metallicity axis
                 points = self._get_fine_edges(metals)[1:]
+
+                # Add points for any metallicities beyond the axis (where
+                # mass forms), so they keep their value (as a constant one
+                # does) and aren't clamped onto its ends
+                values = np.broadcast_to(
+                    dist.get_metallicities(ages * yr), ages.shape
+                )
+                formed = values[weights * age_masses[:, None] > 0]
+                ends = (
+                    np.array([formed.min(), formed.max()])
+                    if formed.size > 0
+                    else points[:1]
+                )
+                points = np.unique(
+                    np.concatenate(
+                        [
+                            points,
+                            ends[(ends < points[0]) | (ends > points[-1])],
+                        ]
+                    )
+                )
                 metal_edges = np.repeat(points, 2)
                 metal_weights = self._average_over_samples(
-                    self._deposit_on_points(
-                        dist.get_metallicities(ages * yr), points
-                    ),
+                    self._deposit_on_points(values, points),
                     weights,
                 )
             else:
@@ -644,13 +754,17 @@ class Stars(StarsComponent):
             edges = {"ages": age_edges, "metallicities": metal_edges}
             return edges, (age_masses[:, None] * metal_weights)[None]
 
+        # Otherwise bin the metallicities separately
         metal_edges, metal_weights = self._get_metal_bins()
+
+        # The population is the outer product of the two, with a leading
+        # axis for the single population
         edges = {"ages": age_edges, "metallicities": metal_edges}
         masses = (age_masses[:, None] * metal_weights[None, :])[None]
         return edges, masses
 
     @staticmethod
-    def _get_age_samples(age_edges, sf_hist_func=None, offset=0.0):
+    def _get_age_samples(age_edges, sf_hist_func=None):
         """Sample each age bin to average an age dependent distribution.
 
         Each bin is split into AGE_DEPENDENCE_SAMPLES pieces (log spaced
@@ -664,13 +778,10 @@ class Stars(StarsComponent):
                 The increasing age bin edges (in yr).
             sf_hist_func (SFH.*):
                 The SFH function, or None.
-            offset (float):
-                The offset (in yr) between these ages and the ages the SFH
-                (and the age dependence) are defined at.
 
         Returns:
             tuple:
-                The age (in yr, including the offset) of each sample and the
+                The age (in yr) of each sample and the
                 fraction of the bin's mass in it, each (n_age_bins,
                 AGE_DEPENDENCE_SAMPLES).
         """
@@ -681,11 +792,11 @@ class Stars(StarsComponent):
             sub_edges = np.where(
                 lo > 0, lo * (hi / lo) ** steps, lo + (hi - lo) * steps
             )
-        ages = 0.5 * (sub_edges[:, 1:] + sub_edges[:, :-1]) + offset
+        ages = 0.5 * (sub_edges[:, 1:] + sub_edges[:, :-1])
 
         # Weight each sample by the mass formed in it
         if sf_hist_func is not None:
-            cdf = sf_hist_func.get_cdf((sub_edges + offset).ravel())
+            cdf = sf_hist_func.get_cdf(sub_edges.ravel())
             weights = np.diff(cdf.reshape(sub_edges.shape), axis=1)
         else:
             weights = np.diff(sub_edges, axis=1)
@@ -874,10 +985,10 @@ class Stars(StarsComponent):
                 ages, sample_weights = age_samples
                 if callable(weights):
                     values = weights(ages * yr)
-                    if isinstance(values, unyt_array) and axis_units:
-                        values = values.to(axis_units)
                     if isinstance(values, unyt_array):
-                        values = values.to("dimensionless").ndview
+                        values = convert_in_place(
+                            values, axis_units or "dimensionless"
+                        ).ndview
                     per_sample = cls._deposit_on_points(values, axis_edges)
                     axis_edges = np.repeat(axis_edges, 2)
                 else:
@@ -903,6 +1014,12 @@ class Stars(StarsComponent):
                 raise exceptions.InconsistentArguments(
                     f"Got {weights.size} {axis} weights for "
                     f"{axis_edges.size - 1} bins."
+                )
+
+            # The weights are normalised, so they need a positive sum
+            if not np.sum(weights) > 0:
+                raise exceptions.InconsistentArguments(
+                    f"The {axis} weights must have a positive sum."
                 )
 
             edges[axis] = axis_edges
@@ -940,7 +1057,8 @@ class Stars(StarsComponent):
         At a lookback time of age_offset every star was younger by
         age_offset and stars younger than it hadn't formed. So the bins are
         clipped to ages above age_offset (keeping only the mass in the part
-        of each bin that had formed, see BinMask) and shifted down by it.
+        of each bin that had formed) and shifted down by it. Mass exactly at
+        the offset is kept, with an age of zero.
 
         Args:
             age_offset (unyt_quantity):
@@ -950,12 +1068,33 @@ class Stars(StarsComponent):
             tuple:
                 The bin edges keyed by axis name and the bin masses.
         """
-        offset = age_offset.to("yr").value
-        mask = BinMask()
-        mask.add_axis_condition("ages", ">=", offset)
-        edges, masses = mask.get_masked_bins(self)
-        edges["ages"] = edges["ages"] - offset
-        return edges, masses
+        # Get the offset in years, snapped onto a bin edge it matches so
+        # that edge lands exactly on zero rather than a round off either
+        # side of it
+        offset = self._snap_to_bin_edge(
+            "ages", convert_in_place(age_offset, yr).value
+        )
+
+        # Get the fraction of each age bin that had formed by then. Mass is
+        # uniform within a finite bin, and a zero width bin has formed if
+        # it isn't younger than the offset
+        ages = self._bin_edges["ages"]
+        lo, hi = ages[:-1], ages[1:]
+        finite = hi > lo
+        formed = np.where(
+            finite,
+            np.clip((hi - offset) / np.where(finite, hi - lo, 1.0), 0.0, 1.0),
+            lo >= offset,
+        )
+
+        # Clip the age edges to the offset and shift them down by it
+        edges = dict(self._bin_edges)
+        edges["ages"] = np.maximum(ages, offset) - offset
+
+        # Keep only the mass that had formed
+        shape = [1] * self._bin_masses.ndim
+        shape[self.bin_axes.index("ages") + 1] = formed.size
+        return edges, self._bin_masses * formed.reshape(shape)
 
     @accepts(age_offset=yr)
     def get_at_earlier_time(self, age_offset):
@@ -973,7 +1112,11 @@ class Stars(StarsComponent):
             Stars:
                 New Stars object on the requested grid.
         """
-        return self._from_bins(*self._get_bins_at_earlier_time(age_offset))
+        return self._from_bins(
+            *self._get_bins_at_earlier_time(age_offset),
+            names=self.population_names,
+            **self._get_population_params(),
+        )
 
     def _set_bins(self, edges, masses, units=None):
         """Set the bins describing this population.
@@ -990,6 +1133,7 @@ class Stars(StarsComponent):
                 The units of the edges (None if unitless) keyed by axis
                 name, defaults to the current units (ages in yr).
         """
+        # Store the units of the edges along each axis
         old_units = getattr(self, "_bin_units", {})
         self._bin_units = {
             axis: (units or {}).get(
@@ -997,20 +1141,21 @@ class Stars(StarsComponent):
             )
             for axis in edges
         }
+
+        # Store the bins
         self._bin_edges = edges
         self._bin_masses = masses
 
         # Anything derived from the bins is now stale
         self._sfzh_view = None
-        self._summed_masses = None
-        self._grid_weights = {}
+        self._grid_weights = {"cic": {}, "ngp": {}}
 
         # Keep the SFH and metallicity distribution on the axes current
         self.sf_hist = np.sum(self.sfzh, axis=1)
         self.metal_dist = np.sum(self.sfzh, axis=0)
 
-    def _get_point_bins(self, sfzh):
-        """Get bins from a SFZH defined at the points of the axes.
+    def _sfzh_to_bins(self, sfzh):
+        """Convert an SFZH defined at the points of the axes into bins.
 
         Each point of the age and metallicity axes becomes a zero width bin,
         with the (empty) finite bins between them. Mapping these onto any
@@ -1025,17 +1170,21 @@ class Stars(StarsComponent):
             tuple:
                 The bin edges keyed by axis name and the bin masses.
         """
-        age_edges, _ = self._get_points_as_bins(
-            self.ages.to("yr").ndview, np.zeros(self.ages.size)
+        # Repeating each point gives a zero width bin at it, with a finite
+        # bin between each pair of points
+        age_edges = np.repeat(convert_in_place(self.ages, yr).ndview, 2)
+        metal_edges = np.repeat(
+            np.asarray(self.metallicities, dtype=np.float64), 2
         )
-        metal_edges, _ = self._get_points_as_bins(
-            self.metallicities, np.zeros(self.metallicities.size)
-        )
+
+        # Put the SFZH in the zero width bins (even indices on both axes),
+        # leaving the finite bins between them empty
         masses = np.zeros((1, age_edges.size - 1, metal_edges.size - 1))
         masses[0, ::2, ::2] = sfzh
         return {"ages": age_edges, "metallicities": metal_edges}, masses
 
-    def _bins_to_axes(self, edges, masses):
+    @timed("ParametricStars._bins_to_axes")
+    def _bins_to_axes(self, edges, masses, mask=None):
         """Map bins onto this object's age and metallicity axes.
 
         Args:
@@ -1043,6 +1192,9 @@ class Stars(StarsComponent):
                 The bin edges keyed by axis name.
             masses (np.ndarray):
                 The bin masses.
+            mask (np.ndarray of float):
+                The allowed range along each bin axis (see get_mask), or
+                None.
 
         Returns:
             np.ndarray:
@@ -1059,9 +1211,16 @@ class Stars(StarsComponent):
         metal_axis = (
             self.log10metallicities if log_metals else self.metallicities
         )
+
+        # Sum over any other axes, the mask then only applies to the ages
+        # and metallicities
         edges, masses = self._marginalise(
             edges, masses, ("ages", "metallicities")
         )
+        if mask is not None:
+            mask = np.ascontiguousarray(mask[:2])
+
+        # Spread the bins onto the axis points (ages are always log10)
         return compute_parametric_weights(
             (
                 np.ascontiguousarray(self.log10ages, dtype=np.float64),
@@ -1073,180 +1232,72 @@ class Stars(StarsComponent):
             ),
             np.ascontiguousarray(masses, dtype=np.float64),
             (True, log_metals),
+            (0, 1),
+            (1.0, 1.0),
             1,
-            None,
+            mask,
+            (
+                "log10ages",
+                "log10metallicities" if log_metals else "metallicities",
+            ),
         )
 
-    def get_grid_axis_values(self, grid, model=None, edges=None, npop=None):
-        """Get the values along the grid axes this population has no bins on.
+    def _get_unbinned_axis_value(self, grid, axis_name, model=None):
+        """Get the value along a grid axis this population has no bins on.
 
-        These are looked up exactly as particle attributes are (on the
-        emission model's fixed parameters, then on this object), and each
-        is either one value for every population or one per population.
+        The value is looked up exactly as particle attributes are (on the
+        emission model's fixed parameters, then on this object).
 
         Args:
             grid (Grid):
-                The grid whose axes need values.
+                The grid the axis belongs to.
+            axis_name (str):
+                The name of the grid's axis (with any log10 prefix).
             model (EmissionModel):
                 The emission model, or None.
-            edges (dict):
-                The bin edges to check the axes of, defaults to this
-                population's.
-            npop (int):
-                The number of populations, defaults to this object's.
 
         Returns:
-            dict:
-                The linear value(s) along each missing axis in the grid's
-                units, keyed by the (unlogged) axis name.
+            np.ndarray of float:
+                The linear value(s) in the grid's units.
+
+        Raises:
+            MissingAttribute:
+                If there is no value for the axis.
         """
-        if edges is None:
-            edges = self._bin_edges
-        if npop is None:
-            npop = self.npop
-        values = {}
-        for axis_name in grid._extract_axes:
-            log = axis_name.startswith("log10")
-            axis = axis_name[5:] if log else axis_name
-            if axis in edges:
-                continue
-            try:
-                value = get_param(axis_name, model, None, self)
-            except exceptions.MissingAttribute:
-                raise exceptions.MissingAttribute(
-                    f"This parametric Stars has no bins or value along "
-                    f"{axis} (it is binned along {tuple(edges)}). Give it "
-                    "extra_axes, or set a value on the emission model or "
-                    "the Stars."
-                ) from None
-            if isinstance(value, (unyt_array, unyt_quantity)):
-                value = value.to(grid._axes_units[axis]).ndview
-            value = np.atleast_1d(np.asarray(value, dtype=np.float64))
-            if log:
-                value = 10**value
-            if value.size not in (1, npop):
-                raise exceptions.InconsistentArguments(
-                    f"Got {value.size} values of {axis} for {npop} "
-                    "populations."
-                )
-            values[axis] = value
-        return values
+        # Get the name of the axis without any log10 prefix
+        log = axis_name.startswith("log10")
+        axis = axis_name[5:] if log else axis_name
 
-    def get_bins_for_grid(
-        self,
-        grid,
-        mask=None,
-        edges=None,
-        masses=None,
-        combine_populations=False,
-        axis_values=None,
-    ):
-        """Get bins ordered like a grid's axes and in the grid's units.
+        # A model can fix a log10 axis by its linear name, which is looked
+        # up directly so a log10 attribute on this object can't shadow it
+        fixed = getattr(model, "fixed_parameters", {})
+        if log and axis in fixed and axis_name not in fixed:
+            axis_name, log = axis, False
 
-        Bin axes the grid doesn't have are summed over, and grid axes with no
-        bins get a zero width bin at their value (see get_grid_axis_values).
-
-        Args:
-            grid (Grid):
-                The grid whose axes the bins are matched to by name (with any
-                log10 prefix removed).
-            mask (BinMask):
-                A mask to apply to the bins, or None.
-            edges (dict):
-                The bin edges to use (in linear units, ages in yr), defaults
-                to this population's.
-            masses (np.ndarray):
-                The bin masses to use, defaults to this population's.
-            combine_populations (bool):
-                Sum the masses over the populations (exact for anything
-                integrated over them, see summed_bin_masses).
-            axis_values (dict):
-                The value(s) along each grid axis with no bins, defaults to
-                those from get_grid_axis_values (without a model).
-
-        Returns:
-            tuple:
-                The bin edges along each grid axis (in the grid's units), the
-                bin masses (with axes ordered like the grid's) and the log10
-                flag for each grid axis.
-        """
-        if axis_values is None:
-            axis_values = (
-                self.get_grid_axis_values(grid)
-                if edges is None
-                else self.get_grid_axis_values(
-                    grid, edges=edges, npop=masses.shape[0]
-                )
+        # Look the value up on the model then this object
+        try:
+            value = get_param(
+                axis_name, model, None, self, preserve_units=True
             )
-        per_population = any(np.size(v) > 1 for v in axis_values.values())
+        except exceptions.MissingAttribute:
+            raise exceptions.MissingAttribute(
+                f"This parametric Stars has no bins or value along {axis}. "
+                "Give it extra_axes, or set a value on the emission model "
+                "or the Stars."
+            ) from None
 
-        if edges is None:
-            edges = self._bin_edges
-            masses = (
-                self.summed_bin_masses
-                if combine_populations and not per_population
-                else self.bin_masses
+        # Get the linear value in the grid's units (a log10 value has no
+        # units to convert)
+        if isinstance(value, (unyt_array, unyt_quantity)):
+            value = (
+                value.ndview
+                if log
+                else convert_in_place(value, grid._axes_units[axis]).ndview
             )
-
-        # Apply the mask, which clips the bins to the parts that pass and
-        # scales their masses to match
-        if mask is not None:
-            edges, masses = mask.get_masked_bins(self, edges, masses)
-
-        # Sum over the bin axes the grid doesn't have
-        grid_axes = [
-            a[5:] if a.startswith("log10") else a for a in grid._extract_axes
-        ]
-        edges, masses = self._marginalise(edges, masses, grid_axes)
-
-        # Give each grid axis without bins a zero width bin at its value
-        edges = dict(edges)
-        for axis, value in axis_values.items():
-            if value.size == 1:
-                edges[axis] = np.repeat(value, 2)
-                masses = masses[..., None]
-                continue
-            if masses.shape[0] != value.size:
-                raise exceptions.InconsistentArguments(
-                    f"Got one {axis} per population but masses for "
-                    f"{masses.shape[0]} population(s)."
-                )
-            points, index = np.unique(value, return_inverse=True)
-            edges[axis] = np.repeat(points, 2)
-            new_masses = np.zeros(masses.shape + (2 * points.size - 1,))
-            for ipop in range(masses.shape[0]):
-                new_masses[ipop, ..., 2 * index[ipop]] = masses[ipop]
-            masses = new_masses
-        if combine_populations and masses.shape[0] > 1:
-            masses = np.sum(masses, axis=0, keepdims=True)
-
-        grid_edges = []
-        log_flags = []
-        bin_order = []
-        axes = list(edges)
-        for axis_name, bin_axis in zip(grid._extract_axes, grid_axes):
-            axis_edges = edges[bin_axis]
-
-            # Convert to the grid's units if the edges have units
-            units = self._bin_units.get(bin_axis)
-            if units is not None and bin_axis not in axis_values:
-                axis_edges = (
-                    unyt_array(axis_edges, units)
-                    .to(grid._axes_units[bin_axis])
-                    .ndview
-                )
-            grid_edges.append(
-                np.ascontiguousarray(axis_edges, dtype=np.float64)
-            )
-            log_flags.append(axis_name.startswith("log10"))
-            bin_order.append(axes.index(bin_axis))
-
-        masses = np.transpose(masses, [0] + [i + 1 for i in bin_order])
-        return (
-            tuple(grid_edges),
-            np.ascontiguousarray(masses, dtype=np.float64),
-            tuple(log_flags),
-        )
+        value = np.atleast_1d(np.asarray(value, dtype=np.float64))
+        if log:
+            value = 10**value
+        return value
 
     def get_fraction_outside_grid(self, grid, model=None):
         """Get the fraction of the mass outside a grid's axes.
@@ -1261,35 +1312,75 @@ class Stars(StarsComponent):
             grid (Grid):
                 The grid to compare to.
             model (EmissionModel):
-                The emission model, for values along axes with no bins (see
-                get_grid_axis_values).
+                The emission model, for values along axes with no bins, or
+                None.
 
         Returns:
             float:
                 The fraction of the mass outside the grid's axes.
+
+        Raises:
+            InconsistentArguments:
+                If a grid axis without bins doesn't have one value or one
+                per population.
         """
-        edges, masses, log_flags = self.get_bins_for_grid(
-            grid,
-            combine_populations=True,
-            axis_values=self.get_grid_axis_values(grid, model),
-        )
-        total = np.sum(masses)
+        # Nothing is outside the grid if there is no mass
+        total = np.sum(self._bin_masses)
         if total == 0.0:
             return 0.0
 
-        # Scale the masses by the fraction of each bin inside the grid
-        # along each axis in turn
-        inside = masses
-        for iaxis, (axis, axis_edges, log) in enumerate(
-            zip(grid._extract_axes, edges, log_flags)
-        ):
-            values = grid._extract_axes_values[axis]
+        # Scale the masses by the fraction inside the grid along each of
+        # its axes in turn
+        inside = self._bin_masses
+        for axis_name in grid._extract_axes:
+            # Get the (linear) range of the grid along this axis
+            log = axis_name.startswith("log10")
+            axis = axis_name[5:] if log else axis_name
+            values = grid._extract_axes_values[axis_name]
             gmin, gmax = (
                 (10 ** values[0], 10 ** values[-1])
                 if log
                 else (values[0], values[-1])
             )
-            lo, hi = axis_edges[:-1], axis_edges[1:]
+
+            # Without bins along this axis (or with a value fixed on the
+            # model, which overrides them) each population is entirely
+            # inside or outside at its value
+            fixed = getattr(model, "fixed_parameters", {})
+            if (
+                axis not in self._bin_edges
+                or axis in fixed
+                or axis_name in fixed
+            ):
+                # Sum over the bins the fixed value replaces
+                if axis in self._bin_edges:
+                    inside = np.sum(
+                        inside,
+                        axis=self.bin_axes.index(axis) + 1,
+                        keepdims=True,
+                    )
+                value = self._get_unbinned_axis_value(grid, axis_name, model)
+                if value.size not in (1, self.npop):
+                    raise exceptions.InconsistentArguments(
+                        f"Got {value.size} values of {axis} for "
+                        f"{self.npop} populations."
+                    )
+                frac = (value >= gmin) & (value <= gmax)
+                shape = [-1] + [1] * (inside.ndim - 1)
+                inside = inside * frac.reshape(shape)
+                continue
+
+            # Otherwise get the bin edges in the grid's units
+            units = self._bin_units[axis]
+            edges = self._bin_edges[axis]
+            if units is not None:
+                edges = edges * get_attr_unit_conversion(
+                    units, grid._axes_units[axis]
+                )
+
+            # Get the fraction of each bin inside the grid, a zero width
+            # bin is either inside or not
+            lo, hi = edges[:-1], edges[1:]
             width = hi - lo
             overlap = np.clip(
                 np.minimum(hi, gmax) - np.maximum(lo, gmin), 0.0, None
@@ -1300,7 +1391,7 @@ class Stars(StarsComponent):
                 (lo >= gmin) & (lo <= gmax),
             )
             shape = [1] * inside.ndim
-            shape[iaxis + 1] = -1
+            shape[self.bin_axes.index(axis) + 1] = -1
             inside = inside * frac.reshape(shape)
 
         return float(1.0 - np.sum(inside) / total)
@@ -1308,9 +1399,14 @@ class Stars(StarsComponent):
     def _bins_to_grid(self, grid, edges, masses):
         """Map bins onto a grid's axes.
 
+        Bin axes the grid doesn't have are summed over, and a grid axis with
+        no bins has all the mass at a single value (see
+        _get_unbinned_axis_value).
+
         Args:
             grid (Grid):
-                The grid to map onto.
+                The grid to map onto, whose axes are matched to the bin axes
+                by name (with any log10 prefix removed).
             edges (dict):
                 The bin edges keyed by axis name.
             masses (np.ndarray):
@@ -1319,23 +1415,96 @@ class Stars(StarsComponent):
         Returns:
             np.ndarray:
                 The mass (Msun) at each grid point.
+
+        Raises:
+            MissingAttribute:
+                If the grid has an axis this object has no bins or value
+                along.
+            InconsistentArguments:
+                If a grid axis without bins has a value per population.
         """
         # Imported here to avoid importing the extension at module load
         from synthesizer.extensions.parametric_spectra import (
             compute_parametric_weights,
         )
 
-        grid_edges, grid_masses, log_flags = self.get_bins_for_grid(
-            grid, edges=edges, masses=masses
-        )
+        # Sum over the bin axes the grid doesn't have
+        grid_bin_axes = [
+            a[5:] if a.startswith("log10") else a for a in grid._extract_axes
+        ]
+        edges, masses = self._marginalise(edges, masses, grid_bin_axes)
+        axes = list(edges)
+
+        # Set up lists for the bin edges along each grid axis, whether the
+        # grid axis is log10, the bin axis matching it and the factor
+        # converting the edges into the grid's units
+        grid_edges = []
+        log_flags = []
+        bin_axes = []
+        unit_scales = []
+
+        # Loop over the grid's axes matching each to a bin axis
+        for axis_name, bin_axis in zip(grid._extract_axes, grid_bin_axes):
+            log_flags.append(axis_name.startswith("log10"))
+
+            # Without bins along this axis all the mass is at one value
+            # (already in the grid's units), on a new trailing axis
+            if bin_axis not in edges:
+                value = self._get_unbinned_axis_value(grid, axis_name)
+                if value.size != 1:
+                    # TODO: no value per population here, expand the
+                    # masses as the extractor does if this is ever needed
+                    raise exceptions.InconsistentArguments(
+                        f"Mapping onto a grid needs a single {bin_axis}, "
+                        f"got one per population."
+                    )
+                grid_edges.append(np.repeat(value, 2))
+                bin_axes.append(masses.ndim - 1)
+                unit_scales.append(1.0)
+                masses = masses[..., None]
+                continue
+
+            # Otherwise use the bin edges, with the factor converting them
+            # into the grid's units if they have any
+            grid_edges.append(
+                np.ascontiguousarray(edges[bin_axis], dtype=np.float64)
+            )
+            bin_axes.append(axes.index(bin_axis))
+            units = self._bin_units[bin_axis]
+            unit_scales.append(
+                1.0
+                if units is None
+                else get_attr_unit_conversion(
+                    units, grid._axes_units[bin_axis]
+                )
+            )
+
+        # Spread the bins onto the grid points
         return compute_parametric_weights(
             tuple(grid._extract_axes_values[a] for a in grid._extract_axes),
-            grid_edges,
-            grid_masses,
-            log_flags,
+            tuple(grid_edges),
+            np.ascontiguousarray(masses, dtype=np.float64),
+            tuple(log_flags),
+            tuple(bin_axes),
+            tuple(unit_scales),
             1,
             None,
+            tuple(grid._extract_axes),
         )
+
+    def _get_population_params(self):
+        """Get the parameters and morphology describing the populations.
+
+        Returns:
+            dict:
+                The arguments giving a new Stars the same parameters and
+                morphology as this one.
+        """
+        params = {
+            name: getattr(self, name, None) for name in self._parameter_names
+        }
+        params["morphology"] = self.morphology
+        return params
 
     def _from_bins(
         self,
@@ -1343,6 +1512,7 @@ class Stars(StarsComponent):
         masses,
         log10ages=None,
         metallicities=None,
+        names=None,
         units=None,
         **kwargs,
     ):
@@ -1357,6 +1527,8 @@ class Stars(StarsComponent):
                 The log10 age axis, defaults to this object's.
             metallicities (np.ndarray of float):
                 The metallicity axis, defaults to this object's.
+            names (list of str):
+                A name for each population, or None.
             units (dict):
                 The units of the edges keyed by axis name, defaults to this
                 object's.
@@ -1371,16 +1543,17 @@ class Stars(StarsComponent):
             log10ages = self.log10ages
         if metallicities is None:
             metallicities = self.metallicities
-        new = Stars.from_sfzh(
+        new = Stars(
             log10ages,
             metallicities,
-            np.zeros((len(log10ages), len(metallicities))),
+            sfzh=np.zeros((len(log10ages), len(metallicities))),
             **kwargs,
         )
         new._set_bins(
             edges, masses, self._bin_units if units is None else units
         )
         new.initial_mass = (np.sum(masses) * Msun).in_base("galactic")
+        new.population_names = None if names is None else list(names)
         return new
 
     def get_population_photo_lnu(self, *args, **kwargs):
@@ -1486,25 +1659,6 @@ class Stars(StarsComponent):
         """
         return self._bin_masses.shape[0]
 
-    @property
-    def summed_bin_masses(self):
-        """The mass in each bin summed over the populations (Msun).
-
-        Every population shares the same edges, so summing over populations
-        is exact for anything integrated over them (e.g. the integrated
-        emission), and makes its cost independent of the number of
-        populations.
-
-        Returns:
-            np.ndarray:
-                The summed masses with shape (1, nbins_0, ..., nbins_N).
-        """
-        if self._summed_masses is None:
-            self._summed_masses = np.sum(
-                self._bin_masses, axis=0, keepdims=True
-            )
-        return self._summed_masses
-
     def get_bin_edges(self, axis, values_only=False):
         """Get the bin edges along an axis.
 
@@ -1517,17 +1671,23 @@ class Stars(StarsComponent):
         Returns:
             unyt_array/np.ndarray:
                 The bin edges in linear units.
+
+        Raises:
+            MissingAttribute:
+                If the population is not binned along the axis.
         """
+        # Ensure we have bins along this axis
         if axis not in self._bin_edges:
             raise exceptions.MissingAttribute(
                 f"This parametric Stars has no bins along {axis} (it is "
                 f"binned along {self.bin_axes})."
             )
+        # Attach the units of the edges (if they have any) to a view
         edges = self._bin_edges[axis]
-        units = self._bin_units.get(axis)
+        units = self._bin_units[axis]
         if values_only or units is None:
             return edges
-        return unyt_array(edges, units)
+        return unyt_array(edges, units, bypass_validation=True)
 
     @property
     def sfzh(self):
@@ -1541,8 +1701,10 @@ class Stars(StarsComponent):
             np.ndarray:
                 The mass (Msun) at each (age, metallicity) point.
         """
+        # Compute the view lazily, caching it (read-only so the cache can't
+        # drift from the bins) until the bins change
         if self._sfzh_view is None:
-            view = self._bins_to_axes(self._bin_edges, self.summed_bin_masses)
+            view = self._bins_to_axes(self._bin_edges, self._bin_masses)
             view.setflags(write=False)
             self._sfzh_view = view
         return self._sfzh_view
@@ -1561,10 +1723,20 @@ class Stars(StarsComponent):
         Will derive a mask of the form attr op thresh, e.g. age > 10 Myr.
 
         A condition on a bin axis (ages or metallicities, or their log10)
-        can cut through a bin, so the mask records the allowed interval and
-        converts it into the fraction of each bin passing (see BinMask).
+        can cut through a bin, so rather than flagging bins the mask is the
+        allowed [lo, hi] range (inclusive, in the linear units of the bin
+        edges) along each bin axis. The extraction clips each bin to this
+        range and keeps the fraction of its mass inside it. A strict
+        inequality moves the bound by one floating point step, so a zero
+        width bin exactly on the threshold is excluded just as a particle
+        would be. "!=" can't be expressed as a single range so isn't
+        supported on a bin axis. An open end of a range is the largest
+        finite float rather than infinity, which the extensions can't handle.
+
         Conditions on a population level value (e.g. a fixed model parameter)
-        include or exclude the whole population.
+        include or exclude whole populations, a failing one empties the
+        range. A value per population can exclude only some of the
+        populations, in which case the mask holds a range for each of them.
 
         Args:
             attr (str):
@@ -1573,8 +1745,8 @@ class Stars(StarsComponent):
                 The threshold value.
             op (str):
                 The operation to apply. Can be '<', '>', '<=', '>=', "==",
-                or "!=".
-            mask (BinMask):
+                or "!=" ("!=" only on population level values).
+            mask (np.ndarray of float):
                 Optionally, a mask to combine with the new mask.
             attr_override_obj (object):
                 An alternative object to check from the attribute. This
@@ -1582,18 +1754,41 @@ class Stars(StarsComponent):
                 fixed parameter override, but can be used more generally.
 
         Returns:
-            mask (BinMask):
-                The combined mask.
+            mask (np.ndarray of float):
+                The combined mask, the allowed range along each bin axis with
+                shape (len(bin_axes), 2), or (npop, len(bin_axes), 2) if it
+                treats the populations differently.
+
+        Raises:
+            InconsistentArguments:
+                If the operator is unknown or "!=" is used on a bin axis, the
+                mask to combine with has the wrong shape, or the attribute is
+                neither a bin axis nor single valued.
         """
-        # Start from a copy of the mask we're combining with
+        # Reject unknown operators
+        if op not in ("<", ">", "<=", ">=", "==", "!="):
+            raise exceptions.InconsistentArguments(
+                "Masking operation must be '<', '>', '<=', '>=', '==', or "
+                f"'!=', not {op}"
+            )
+
+        # Start from a copy of the mask we're combining with, or an open
+        # range along every axis
+        nbin_axes = len(self.bin_axes)
         if mask is None:
-            new_mask = BinMask()
-        elif isinstance(mask, BinMask):
-            new_mask = mask.copy()
+            new_mask = np.empty((nbin_axes, 2))
+            new_mask[:, 0] = -_MASK_BOUND
+            new_mask[:, 1] = _MASK_BOUND
+        elif np.shape(mask) in (
+            (nbin_axes, 2),
+            (self.npop, nbin_axes, 2),
+        ):
+            new_mask = np.array(mask, dtype=np.float64)
         else:
             raise exceptions.InconsistentArguments(
-                "Parametric Stars masks must be BinMask objects, "
-                f"got {type(mask)}."
+                "Parametric Stars masks must be the allowed range along each "
+                f"bin axis with shape ({nbin_axes}, 2) or ({self.npop}, "
+                f"{nbin_axes}, 2), got {np.shape(mask)}."
             )
 
         # Resolve a string threshold as an attribute alias on the emitter
@@ -1612,10 +1807,27 @@ class Stars(StarsComponent):
         # Otherwise, is this a condition on a bin axis?
         axis = attr[5:] if attr.startswith("log10") else attr
         if override is None and axis in self.bin_axes:
-            axis_units = self._bin_units.get(axis)
-            new_mask.add_axis_condition(
-                axis, op, to_axis_threshold(thresh, attr, axis_units)
-            )
+            # "!=" would need a range with a hole in it
+            if op == "!=":
+                raise exceptions.InconsistentArguments(
+                    f"Can't mask a parametric Stars on {attr} with '!=', "
+                    "masks on the bin axes must be a single range."
+                )
+
+            # Narrow the axis' range, moving strict bounds by one step so a
+            # value exactly on the threshold fails
+            iaxis = self.bin_axes.index(axis)
+            value = self._get_axis_threshold(thresh, attr, axis)
+            if op in ("<", "<=", "=="):
+                hi = np.nextafter(value, -np.inf) if op == "<" else value
+                np.minimum(
+                    new_mask[..., iaxis, 1], hi, out=new_mask[..., iaxis, 1]
+                )
+            if op in (">", ">=", "=="):
+                lo = np.nextafter(value, np.inf) if op == ">" else value
+                np.maximum(
+                    new_mask[..., iaxis, 0], lo, out=new_mask[..., iaxis, 0]
+                )
             return new_mask
 
         # Anything else must be a population level value, either one for all
@@ -1631,8 +1843,153 @@ class Stars(StarsComponent):
                 f"({self.bin_axes}) and quantities with one value (or one "
                 "per population) can be masked."
             )
-        new_mask.add_population_condition(value, op, thresh)
+
+        # Apply the operator
+        if op == ">":
+            include = value > thresh
+        elif op == "<":
+            include = value < thresh
+        elif op == ">=":
+            include = value >= thresh
+        elif op == "<=":
+            include = value <= thresh
+        elif op == "==":
+            include = value == thresh
+        else:
+            include = value != thresh
+
+        # A failing population level condition excludes a whole population,
+        # which we mark by emptying its first axis' range. Unless every
+        # population agrees this needs a range per population
+        include = np.atleast_1d(np.asarray(include, dtype=bool))
+        if include.all():
+            return new_mask
+        if include.size > 1 and include.any() and new_mask.ndim == 2:
+            new_mask = np.tile(new_mask, (self.npop, 1, 1))
+        if new_mask.ndim == 3:
+            new_mask[~np.broadcast_to(include, (self.npop,)), 0] = (
+                _MASK_BOUND,
+                -_MASK_BOUND,
+            )
+        else:
+            new_mask[0] = (_MASK_BOUND, -_MASK_BOUND)
         return new_mask
+
+    def get_population_mask(self, mask):
+        """Get which populations a mask includes.
+
+        The ranges along the bin axes act on the bins when the emission is
+        extracted, so only a population level condition can exclude a whole
+        population.
+
+        Args:
+            mask (np.ndarray of float):
+                A mask from get_mask, or None.
+
+        Returns:
+            np.ndarray of bool:
+                Whether each population is included, or None if the mask
+                includes them all.
+        """
+        # No mask includes every population
+        if mask is None:
+            return None
+
+        # A single set of ranges treats every population alike: an empty
+        # first range (e.g. a condition they all fail) excludes them all
+        if np.ndim(mask) == 2:
+            if mask[0, 0] <= mask[0, 1]:
+                return None
+            return np.zeros(self.npop, dtype=bool)
+
+        # An excluded population has an empty first range
+        return mask[:, 0, 0] <= mask[:, 0, 1]
+
+    def _get_axis_threshold(self, thresh, attr, axis):
+        """Convert a mask threshold into the linear units of a bin axis.
+
+        Args:
+            thresh (float/unyt_quantity):
+                The threshold as given to the mask.
+            attr (str):
+                The masked attribute (e.g. "log10ages" or "ages").
+            axis (str):
+                The bin axis the attribute refers to (e.g. "ages").
+
+        Returns:
+            float:
+                The threshold in the units of the axis' bin edges, snapped
+                onto a bin edge it matches to within round off.
+
+        Raises:
+            InconsistentArguments:
+                If the axis has units but the threshold does not.
+        """
+        # A log10 attribute's threshold is the log10 of the linear value
+        if attr.startswith("log10"):
+            if isinstance(thresh, unyt_quantity):
+                thresh = thresh.ndview
+            return self._snap_to_bin_edge(axis, float(thresh), log=True)
+
+        # Otherwise convert any units to the edge units
+        elif isinstance(thresh, unyt_quantity):
+            if self._bin_units[axis] is not None:
+                value = float(
+                    convert_in_place(thresh, self._bin_units[axis]).ndview
+                )
+            else:
+                value = float(thresh.ndview)
+
+        # A unitless threshold can't be compared with an axis that has units
+        elif self._bin_units[axis] is not None:
+            raise exceptions.InconsistentArguments(
+                f"Masking attribute ({attr}) has units but threshold does not "
+                f"({thresh})."
+            )
+        else:
+            value = float(thresh)
+
+        return self._snap_to_bin_edge(axis, value)
+
+    def _snap_to_bin_edge(self, axis, value, log=False):
+        """Snap a value onto a bin edge it matches to within round off.
+
+        The edges and the value reach linear units by different routes (e.g.
+        10**log10age or a unit conversion), which can differ in the last few
+        bits. That would put a zero width bin lying exactly on the value on
+        the wrong side of it, so a value matching an edge becomes that edge.
+
+        The comparison is made in the space the value was given in, since a
+        round off in a log10 value is amplified when it is made linear.
+
+        Args:
+            axis (str):
+                The bin axis to snap onto (e.g. "ages").
+            value (float):
+                The value, in the units of the axis' bin edges (or their
+                log10 if log is True).
+            log (bool):
+                Whether the value is the log10 of a point on the axis.
+
+        Returns:
+            float:
+                The value in the linear units of the axis' bin edges, equal
+                to a bin edge if it matched one.
+        """
+        # Get the linear value and the edges either side of it
+        linear = 10**value if log else value
+        edges = self._bin_edges[axis]
+        upper = min(np.searchsorted(edges, linear), edges.size - 1)
+
+        # Return an edge the value matches to within a few floating point
+        # steps (an edge at zero has no log10 to match)
+        tol = 4 * np.spacing(abs(value))
+        for edge in (edges[max(upper - 1, 0)], edges[upper]):
+            if log and edge <= 0:
+                continue
+            if abs((np.log10(edge) if log else edge) - value) <= tol:
+                return float(edge)
+        return linear
 
     def calculate_median_age(self):
         """Calculate the median age of the stellar population."""
@@ -1645,33 +2002,6 @@ class Stars(StarsComponent):
     def calculate_mean_metallicity(self):
         """Calculate the mean metallicity of the stellar population."""
         return weighted_mean(self.metallicities, self.metal_dist)
-
-    @classmethod
-    def from_sfzh(cls, log10ages, metallicities, sfzh, **kwargs):
-        """Create a Stars from the mass formed at each axis point.
-
-        Each (age, metallicity) point of the axes holds the mass formed at
-        exactly that age and metallicity (a zero width bin), e.g. the SFZH
-        of a particle Stars binned onto a grid's axes. Use from_binned for
-        bins that don't sit on the axes.
-
-        Args:
-            log10ages (np.ndarray of float):
-                The log10 age axis.
-            metallicities (np.ndarray of float):
-                The metallicity axis.
-            sfzh (np.ndarray of float):
-                The mass (in Msun) formed at each (age, metallicity) point,
-                with shape (len(log10ages), len(metallicities)).
-            **kwargs (dict):
-                Any other arguments for the Stars, e.g. initial_mass to
-                normalise the SFZH, or fesc.
-
-        Returns:
-            Stars:
-                The population.
-        """
-        return cls(log10ages, metallicities, _point_sfzh=sfzh, **kwargs)
 
     @classmethod
     def from_binned(
@@ -1726,18 +2056,17 @@ class Stars(StarsComponent):
             Stars:
                 The binned population(s).
         """
-        age_edges = (
-            age_edges.to("yr").value
-            if isinstance(age_edges, unyt_array)
-            else np.asarray(age_edges, dtype=np.float64)
-        )
+        # Get the edges and masses as doubles in yr and Msun (the masses
+        # are copied so scaling them never touches the caller's array)
+        if isinstance(age_edges, unyt_array):
+            age_edges = convert_in_place(age_edges, yr).ndview
+        age_edges = np.asarray(age_edges, dtype=np.float64)
         metallicity_edges = np.asarray(metallicity_edges, dtype=np.float64)
-        masses = (
-            masses.to("Msun").value
-            if isinstance(masses, unyt_array)
-            else np.array(masses, dtype=np.float64)
-        )
-        # Collect the edges (and units) along every axis
+        if isinstance(masses, unyt_array):
+            masses = convert_in_place(masses, Msun).ndview
+        masses = np.array(masses, dtype=np.float64)
+
+        # Collect the edges (and their units) along every axis
         edges = {"ages": age_edges, "metallicities": metallicity_edges}
         units = {"ages": yr, "metallicities": None}
         for axis, axis_edges in (extra_edges or {}).items():
@@ -1746,6 +2075,8 @@ class Stars(StarsComponent):
                 units[axis] = axis_edges.units
                 axis_edges = axis_edges.ndview
             edges[axis] = np.asarray(axis_edges, dtype=np.float64)
+
+        # A single population has no population axis yet
         if masses.ndim == len(edges):
             masses = masses[None]
 
@@ -1754,6 +2085,7 @@ class Stars(StarsComponent):
             edges["ages"] = age_edges[::-1]
             masses = masses[:, ::-1]
 
+        # Check the masses match the edges and the edges are monotonic
         nbins = tuple(axis_edges.size - 1 for axis_edges in edges.values())
         if masses.shape[1:] != nbins:
             raise exceptions.InconsistentArguments(
@@ -1764,6 +2096,8 @@ class Stars(StarsComponent):
             raise exceptions.InconsistentArguments(
                 "The bin edges must be monotonic."
             )
+
+        # Add any distributions along further axes
         edges, masses, units = cls._add_extra_axes(
             edges,
             masses,
@@ -1774,13 +2108,20 @@ class Stars(StarsComponent):
             ),
         )
 
-        stars = cls.from_sfzh(
+        stars = cls(
             log10ages,
             metallicities,
-            np.zeros((len(log10ages), len(metallicities))),
+            sfzh=np.zeros((len(log10ages), len(metallicities))),
             **kwargs,
         )
-        stars._set_bins(edges, np.ascontiguousarray(masses), units)
+        stars._set_bins(
+            {
+                axis: np.ascontiguousarray(axis_edges)
+                for axis, axis_edges in edges.items()
+            },
+            np.ascontiguousarray(masses),
+            units,
+        )
         stars.initial_mass = (np.sum(masses) * Msun).in_base("galactic")
         if names is not None:
             if len(names) != stars.npop:
@@ -1830,10 +2171,13 @@ class Stars(StarsComponent):
                 raise exceptions.InconsistentAddition(
                     "Stars can only be combined if they have the same axes"
                 )
-            if other.bin_axes != first.bin_axes:
+            if list(other._bin_units.items()) != list(
+                first._bin_units.items()
+            ):
                 raise exceptions.InconsistentAddition(
                     "Stars can only be combined if they are binned along the "
-                    f"same axes (got {first.bin_axes} and {other.bin_axes})"
+                    f"same axes in the same units (got {first._bin_units} "
+                    f"and {other._bin_units})"
                 )
 
         # Rebin every population onto the union of all the edges
@@ -1860,29 +2204,49 @@ class Stars(StarsComponent):
             *[stars._parameter_names for stars in populations]
         )
         for name in sorted(common):
+            given = [getattr(stars, name) for stars in populations]
+
+            # A parameter no population has set stays unset
+            if all(value is None for value in given):
+                params[name] = None
+                continue
+
+            # One only some populations have set can't be combined
+            if any(value is None for value in given):
+                warn(
+                    f"Only some of the populations have {name}, the "
+                    "combined Stars won't have it."
+                )
+                continue
+
+            # Get one value per population, in the units of the first
+            units = getattr(given[0], "units", None)
             try:
                 values = np.concatenate(
                     [
                         np.broadcast_to(
-                            np.asarray(getattr(stars, name)), (stars.npop,)
+                            np.asarray(
+                                value if units is None else value.to(units)
+                            ),
+                            (stars.npop,),
                         )
-                        for stars in populations
+                        for stars, value in zip(populations, given)
                     ]
                 )
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, AttributeError):
                 warn(
                     f"Can't combine {name} into one value per population, "
                     "the combined Stars won't have it."
                 )
                 continue
-            params[name] = values[0] if np.all(values == values[0]) else values
+
+            # Keep a single value if the populations agree
+            if np.all(values == values[0]):
+                values = values[0]
+            params[name] = values if units is None else values * units
 
         # Combine the morphologies
         params["morphology"] = cls._combine_morphologies(populations)
-
-        combined = first._from_bins(
-            edges, np.concatenate(all_masses, axis=0), **params
-        )
 
         # Name the populations
         if names is None and all(
@@ -1891,12 +2255,12 @@ class Stars(StarsComponent):
             names = [
                 n for stars in populations for n in stars.population_names
             ]
-        if names is not None and len(names) != combined.npop:
+        masses = np.concatenate(all_masses, axis=0)
+        if names is not None and len(names) != masses.shape[0]:
             raise exceptions.InconsistentArguments(
-                f"Got {len(names)} names for {combined.npop} populations."
+                f"Got {len(names)} names for {masses.shape[0]} populations."
             )
-        combined.population_names = None if names is None else list(names)
-        return combined
+        return first._from_bins(edges, masses, names=names, **params)
 
     @staticmethod
     def _combine_morphologies(populations):
@@ -1913,7 +2277,12 @@ class Stars(StarsComponent):
                 has no morphology).
         """
         morphologies = [stars.morphology for stars in populations]
-        if all(morph is morphologies[0] for morph in morphologies):
+        # A shared morphology is kept, unless it describes the populations
+        # of each Stars separately (and so must be repeated for each)
+        if all(morph is morphologies[0] for morph in morphologies) and (
+            len(populations) == 1
+            or not isinstance(morphologies[0], PopulationMorphology)
+        ):
             return morphologies[0]
         if any(morph is None for morph in morphologies):
             warn(
@@ -1963,12 +2332,14 @@ class Stars(StarsComponent):
                 )
 
         # Pick out this population's parameters
-        params = {}
+        params = self._get_population_params()
         for name in self._parameter_names:
-            value = getattr(self, name, None)
+            value = params[name]
             if np.size(value) == self.npop and self.npop > 1:
-                value = np.asarray(value)[index]
-            params[name] = value
+                # Indexing an array directly keeps any units it has
+                if not isinstance(value, np.ndarray):
+                    value = np.asarray(value)
+                params[name] = value[index]
 
         # And its morphology
         morphology = self.morphology
@@ -1976,14 +2347,14 @@ class Stars(StarsComponent):
             morphology = morphology.get_population_morphology(index)
         params["morphology"] = morphology
 
-        population = self._from_bins(
+        return self._from_bins(
             {axis: edges.copy() for axis, edges in self._bin_edges.items()},
             self.bin_masses[index : index + 1].copy(),
+            names=None
+            if self.population_names is None
+            else [self.population_names[index]],
             **params,
         )
-        if self.population_names is not None:
-            population.population_names = [self.population_names[index]]
-        return population
 
     def __add__(self, other_stars):
         """Add two Stars instances together.
@@ -2058,10 +2429,19 @@ class Stars(StarsComponent):
             if self.spectra[key]._fnu is not None:
                 self.spectra[key]._fnu *= conversion
 
+        # And to the spectra of each population
+        for key in self.particle_spectra:
+            self.particle_spectra[key]._lnu *= conversion
+            if self.particle_spectra[key]._fnu is not None:
+                self.particle_spectra[key]._fnu *= conversion
+
         # Apply correction to the SFZH
-        self._set_bins(
-            self._bin_edges, self._bin_masses * np.asarray(conversion)
-        )
+        self._bin_masses *= np.asarray(conversion)
+        self._set_bins(self._bin_edges, self._bin_masses)
+
+        # Ensure sf_hist and metal_dist reflect the rescaled sfzh
+        self.sf_hist = np.sum(self.sfzh, axis=1)
+        self.metal_dist = np.sum(self.sfzh, axis=0)
 
     @accepts(flux=nJy)
     def scale_mass_by_flux(self, flux, scale_filter, spectra_type):
@@ -2118,10 +2498,19 @@ class Stars(StarsComponent):
             if self.spectra[key]._fnu is not None:
                 self.spectra[key]._fnu *= conversion
 
+        # And to the spectra of each population
+        for key in self.particle_spectra:
+            self.particle_spectra[key]._lnu *= conversion
+            if self.particle_spectra[key]._fnu is not None:
+                self.particle_spectra[key]._fnu *= conversion
+
         # Apply correction to the SFZH
-        self._set_bins(
-            self._bin_edges, self._bin_masses * np.asarray(conversion)
-        )
+        self._bin_masses *= np.asarray(conversion)
+        self._set_bins(self._bin_edges, self._bin_masses)
+
+        # Ensure sf_hist and metal_dist reflect the rescaled sfzh
+        self.sf_hist = np.sum(self.sfzh, axis=1)
+        self.metal_dist = np.sum(self.sfzh, axis=0)
 
     @timed("ParametricStars.get_sfzh")
     def get_sfzh(
@@ -2158,6 +2547,8 @@ class Stars(StarsComponent):
             self.bin_masses.copy(),
             log10ages=log10ages,
             metallicities=metallicities,
+            names=self.population_names,
+            **self._get_population_params(),
         )
 
     def plot_sfzh(
@@ -2392,11 +2783,15 @@ class Stars(StarsComponent):
             raise ValueError("Start of t_range must be less than its end.")
 
         # Get the mass formed in the range
-        mask = BinMask()
-        mask.add_axis_condition("ages", ">=", t_start)
-        mask.add_axis_condition("ages", "<", t_end)
+        mask = self.get_mask("ages", t_start * yr, ">=")
+        mask = self.get_mask("ages", t_end * yr, "<", mask=mask)
         mass = (
-            np.sum(self.bin_masses * mask.get_fractions(self)) * Msun
+            np.sum(
+                self._bins_to_axes(
+                    self._bin_edges, self._bin_masses, mask=mask
+                )
+            )
+            * Msun
         ).in_base("galactic")
 
         return (mass / ((t_end - t_start) * yr)).to("Msun/yr")
@@ -2417,7 +2812,7 @@ class Stars(StarsComponent):
             np.ndarray: The surviving SFZH grid in Msun.
         """
         return (
-            self._bins_to_grid(grid, self._bin_edges, self.summed_bin_masses)
+            self._bins_to_grid(grid, self._bin_edges, self._bin_masses)
             * grid.stellar_fraction
         )
 
@@ -2480,9 +2875,7 @@ class Stars(StarsComponent):
                 f"The provided grid does not contain {ion} "
                 "ionising luminosities"
             )
-        weights = self._bins_to_grid(
-            grid, self._bin_edges, self.summed_bin_masses
-        )
+        weights = self._bins_to_grid(grid, self._bin_edges, self._bin_masses)
         return np.sum(10 ** grid.log10_specific_ionising_lum[ion] * weights)
 
     @accepts(age=yr)

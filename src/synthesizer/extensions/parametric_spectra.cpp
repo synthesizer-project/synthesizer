@@ -44,169 +44,6 @@
 #endif
 
 /**
- * @brief Validate the Python population inputs and fill a Populations struct.
- *
- * @param edges_tuple: A tuple of 1D bin edge arrays, one per grid axis (in
- *                     linear units).
- * @param mask_obj: The mask (bool, same shape as the masses) or None.
- * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
- * @param log_flags: A sequence of booleans, one per grid axis, flagging
- *                   axes whose grid coordinates are log10 values.
- * @param grid_props: The grid properties (used for the number of axes).
- * @param pops: The struct to fill.
- *
- * @return True on success, false (with a Python error set) otherwise.
- */
-static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
-                              PyObject *log_flags, PyObject *mask_obj,
-                              GridProps *grid_props, Populations &pops) {
-
-  const int ndim = grid_props->ndim;
-  pops.ndim = ndim;
-
-  /* We need one set of edges and one log flag per grid axis. */
-  if (!PyTuple_Check(edges_tuple) || PyTuple_Size(edges_tuple) != ndim) {
-    PyErr_Format(PyExc_ValueError,
-                 "edges must be a tuple with one array per grid axis (%d).",
-                 ndim);
-    return false;
-  }
-  if (!PySequence_Check(log_flags) || PySequence_Size(log_flags) != ndim) {
-    PyErr_Format(PyExc_ValueError,
-                 "log_flags must be a sequence with one entry per grid axis "
-                 "(%d).",
-                 ndim);
-    return false;
-  }
-
-  /* The masses must have a leading population axis then one per grid axis.
-   */
-  if (!PyArray_Check(reinterpret_cast<PyObject *>(np_masses)) ||
-      PyArray_NDIM(np_masses) != ndim + 1) {
-    PyErr_Format(PyExc_ValueError,
-                 "masses must be an array of shape (npop, nbins_0, ..., "
-                 "nbins_%d).",
-                 ndim - 1);
-    return false;
-  }
-  pops.npop = static_cast<int>(PyArray_DIM(np_masses, 0));
-
-  /* Collect the float arrays so we can check they share one dtype. */
-  PyArrayObject *float_arrays[MAX_GRID_NDIM + 1] = {NULL};
-  const char *float_names[MAX_GRID_NDIM + 1] = {NULL};
-  float_arrays[0] = np_masses;
-  float_names[0] = "masses";
-
-  pops.ncells = 1;
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Get the edges along this axis. */
-    PyObject *edges_obj = PyTuple_GetItem(edges_tuple, idim);
-    if (edges_obj == NULL || !PyArray_Check(edges_obj) ||
-        PyArray_NDIM(reinterpret_cast<PyArrayObject *>(edges_obj)) != 1) {
-      PyErr_Format(PyExc_ValueError,
-                   "The edges for axis %d must be a 1D array.", idim);
-      return false;
-    }
-    PyArrayObject *np_edges = reinterpret_cast<PyArrayObject *>(edges_obj);
-    float_arrays[idim + 1] = np_edges;
-    float_names[idim + 1] = "bin edges";
-
-    /* There is one fewer bin than there are edges. */
-    const npy_intp nedges = PyArray_DIM(np_edges, 0);
-    if (nedges < 2) {
-      PyErr_Format(PyExc_ValueError,
-                   "The edges for axis %d must define at least one bin.",
-                   idim);
-      return false;
-    }
-    pops.nbins[idim] = static_cast<int>(nedges - 1);
-    if (PyArray_DIM(np_masses, idim + 1) != pops.nbins[idim]) {
-      PyErr_Format(PyExc_ValueError,
-                   "masses has %ld bins along axis %d but the edges define "
-                   "%d.",
-                   static_cast<long>(PyArray_DIM(np_masses, idim + 1)), idim,
-                   pops.nbins[idim]);
-      return false;
-    }
-    pops.ncells *= pops.nbins[idim];
-
-    /* Get the log flag for this axis. */
-    PyObject *flag = PySequence_GetItem(log_flags, idim);
-    if (flag == NULL) {
-      return false;
-    }
-    const int is_log = PyObject_IsTrue(flag);
-    Py_DECREF(flag);
-    if (is_log < 0) {
-      return false;
-    }
-    pops.log_axis[idim] = is_log == 1;
-  }
-
-  /* Check the dtypes match and the arrays are contiguous. */
-  if (!is_matching_float_dtypes(float_arrays, float_names, ndim + 1,
-                                &pops.float_typenum)) {
-    return false;
-  }
-  if (PyArray_TYPE(np_masses) != pops.float_typenum) {
-    PyErr_SetString(PyExc_TypeError,
-                    "masses and bin edges must share the same dtype.");
-    return false;
-  }
-
-  /* Store the pointers and check the edges are non-decreasing. */
-  pops.masses = PyArray_DATA(np_masses);
-  for (int idim = 0; idim < ndim; idim++) {
-    PyArrayObject *np_edges =
-        reinterpret_cast<PyArrayObject *>(PyTuple_GetItem(edges_tuple, idim));
-    if (PyArray_TYPE(np_edges) != pops.float_typenum) {
-      PyErr_SetString(PyExc_TypeError,
-                      "masses and bin edges must share the same dtype.");
-      return false;
-    }
-    pops.edges[idim] = PyArray_DATA(np_edges);
-    bool sorted = dispatch_float(pops.float_typenum, [&](auto r) {
-      using Real = decltype(r);
-      const Real *edges = pops.get_edges<Real>(idim);
-      for (int i = 0; i < pops.nbins[idim]; i++) {
-        if (!(edges[i + 1] >= edges[i])) {
-          return false;
-        }
-      }
-      return true;
-    });
-    if (!sorted) {
-      PyErr_Format(PyExc_ValueError,
-                   "The edges for axis %d must be non-decreasing.", idim);
-      return false;
-    }
-  }
-
-  /* Attach the mask if we have one. */
-  pops.mask = nullptr;
-  if (mask_obj != NULL && mask_obj != Py_None) {
-    PyArrayObject *np_mask = array_or_none(mask_obj, "mask");
-    if (np_mask == NULL) {
-      return false;
-    }
-    if (PyArray_TYPE(np_mask) != NPY_BOOL ||
-        !PyArray_SAMESHAPE(np_mask, np_masses)) {
-      PyErr_SetString(PyExc_ValueError,
-                      "mask must be a boolean array with the same shape as "
-                      "the masses.");
-      return false;
-    }
-    if (!is_c_contiguous(np_mask, "mask")) {
-      return false;
-    }
-    pops.mask = static_cast<const npy_bool *>(PyArray_DATA(np_mask));
-  }
-
-  return true;
-}
-
-/**
  * @brief Get the number of wavelength elements from the grid spectra.
  *
  * @param spectra_obj: The grid spectra (grid axes followed by wavelength).
@@ -214,6 +51,7 @@ static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
  * @return The number of wavelength elements, or -1 (with a Python error set).
  */
 static int get_nlam(PyObject *spectra_obj) {
+  /* We need an array with at least one grid axis and a wavelength axis. */
   if (!PyArray_Check(spectra_obj) ||
       PyArray_NDIM(reinterpret_cast<PyArrayObject *>(spectra_obj)) < 2) {
     PyErr_SetString(PyExc_ValueError,
@@ -221,29 +59,203 @@ static int get_nlam(PyObject *spectra_obj) {
                     "followed by a wavelength axis.");
     return -1;
   }
+
+  /* The wavelength axis is the last axis. */
   PyArrayObject *np_spectra = reinterpret_cast<PyArrayObject *>(spectra_obj);
   return static_cast<int>(
       PyArray_DIM(np_spectra, PyArray_NDIM(np_spectra) - 1));
 }
 
 /**
- * @brief Contract each population's grid weights with the grid spectra.
+ * @brief Contract each population's grid weights with one chunk of the grid
+ *        spectra.
  *
- * This is out (npop, nlam) = weights (npop, grid size) x spectra (grid size,
- * nlam), done like integrated_spectra_loop: we walk the grid spectra row by
- * row, skipping grid points no population touches, and add each row to the
- * spectrum of every population with a non-zero weight there. Each row is
- * read once for all the populations, which (for the few populations a
- * parametric Stars typically holds) keeps the product memory bound, and many
- * SFZHs only touch a small part of the grid.
- *
- * The wavelengths are split into chunks small enough that a chunk of every
- * population's spectrum stays in cache, and with OpenMP the chunks are
- * shared between the threads.
+ * We walk the grid spectra row by row, skipping grid points no population
+ * touches, and add this chunk of each row to the spectrum of every
+ * population with a non-zero weight there. Each row is read once for all the
+ * populations, which (for the few populations a parametric Stars typically
+ * holds) keeps the product memory bound, and many SFZHs only touch a small
+ * part of the grid.
  *
  * Accumulation happens in double precision before being written to the
  * output at OutT. Masked wavelengths are skipped and left untouched in the
  * (zero initialised) output.
+ *
+ * @tparam GridReal The floating-point type of the grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
+ * @param grid_props: The grid properties.
+ * @param row_start: The first non-zero weight of each grid point (compressed
+ *                   rows, grid size + 1 entries).
+ * @param pop_inds: The population of each non-zero weight.
+ * @param pop_weights: The non-zero weights.
+ * @param good_lams: The indices of the unmasked wavelengths.
+ * @param npop: The number of populations.
+ * @param start: The first unmasked wavelength of the chunk.
+ * @param len: The number of unmasked wavelengths in the chunk.
+ * @param out: The zero initialised (npop, nlam) output array.
+ */
+template <typename GridReal, typename OutT>
+static void population_spectra_chunk(GridProps *grid_props,
+                                     const std::vector<int> &row_start,
+                                     const std::vector<int> &pop_inds,
+                                     const std::vector<double> &pop_weights,
+                                     const std::vector<int> &good_lams,
+                                     const int npop, const int start,
+                                     const int len, OutT *out) {
+
+  /* Unpack the grid properties. */
+  const GridReal *__restrict grid_spectra =
+      grid_props->get_spectra<GridReal>();
+  const size_t nlam = static_cast<size_t>(grid_props->nlam);
+  const int grid_size = grid_props->size;
+  const bool has_lam_mask = good_lams.size() != nlam;
+
+  /* Set up the accumulators for this chunk of every population's spectrum
+   * and somewhere to gather a row's unmasked wavelengths. */
+  std::vector<double> accum(static_cast<size_t>(npop) * len, 0.0);
+  std::vector<double> seg_buf(has_lam_mask ? len : 0);
+
+  /* Add each grid point's spectrum to every population weighting it. */
+  for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
+
+    /* Skip grid points no population touches. */
+    const int first = row_start[grid_ind];
+    const int last = row_start[grid_ind + 1];
+    if (first == last) {
+      continue;
+    }
+    const GridReal *__restrict row =
+        grid_spectra + static_cast<size_t>(grid_ind) * nlam;
+
+    /* Gather this chunk of the row if wavelengths are masked. */
+    if (has_lam_mask) {
+      for (int j = 0; j < len; j++) {
+        seg_buf[j] = static_cast<double>(row[good_lams[start + j]]);
+      }
+    }
+
+    /* Loop over the populations weighting this grid point. */
+    for (int k = first; k < last; k++) {
+      const double weight = pop_weights[k];
+      double *__restrict acc =
+          accum.data() + static_cast<size_t>(pop_inds[k]) * len;
+
+      /* Add the weighted chunk (gathered or contiguous) to the
+       * population's accumulator. */
+      if (has_lam_mask) {
+        const double *__restrict seg = seg_buf.data();
+#ifdef WITH_OPENMP
+#pragma omp simd
+#endif
+        for (int j = 0; j < len; j++) {
+          acc[j] += weight * seg[j];
+        }
+      } else {
+        const GridReal *__restrict seg = row + start;
+#ifdef WITH_OPENMP
+#pragma omp simd
+#endif
+        for (int j = 0; j < len; j++) {
+          acc[j] += weight * static_cast<double>(seg[j]);
+        }
+      }
+    }
+  }
+
+  /* Write this chunk of every population's spectrum. */
+  for (int ipop = 0; ipop < npop; ipop++) {
+    const double *acc = accum.data() + static_cast<size_t>(ipop) * len;
+    OutT *pop_out = out + static_cast<size_t>(ipop) * nlam;
+    for (int j = 0; j < len; j++) {
+      pop_out[good_lams[start + j]] = static_cast<OutT>(acc[j]);
+    }
+  }
+}
+
+/**
+ * @brief Contract each population's grid weights with the grid spectra.
+ *
+ * This is the serial version of the function.
+ *
+ * @tparam GridReal The floating-point type of the grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
+ * @param grid_props: The grid properties.
+ * @param row_start: The first non-zero weight of each grid point.
+ * @param pop_inds: The population of each non-zero weight.
+ * @param pop_weights: The non-zero weights.
+ * @param good_lams: The indices of the unmasked wavelengths.
+ * @param npop: The number of populations.
+ * @param chunk_len: The number of unmasked wavelengths in each chunk.
+ * @param out: The zero initialised (npop, nlam) output array.
+ */
+template <typename GridReal, typename OutT>
+static void population_spectra_loop_serial(
+    GridProps *grid_props, const std::vector<int> &row_start,
+    const std::vector<int> &pop_inds, const std::vector<double> &pop_weights,
+    const std::vector<int> &good_lams, const int npop, const int chunk_len,
+    OutT *out) {
+
+  /* Loop over the chunks of wavelengths. */
+  const int ngood = static_cast<int>(good_lams.size());
+  for (int start = 0; start < ngood; start += chunk_len) {
+    population_spectra_chunk<GridReal, OutT>(
+        grid_props, row_start, pop_inds, pop_weights, good_lams, npop, start,
+        std::min(chunk_len, ngood - start), out);
+  }
+}
+
+/**
+ * @brief Contract each population's grid weights with the grid spectra.
+ *
+ * This is the parallel version of the function. The chunks of wavelengths
+ * are shared between the threads, each writing only its own wavelengths.
+ *
+ * @tparam GridReal The floating-point type of the grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
+ * @param grid_props: The grid properties.
+ * @param row_start: The first non-zero weight of each grid point.
+ * @param pop_inds: The population of each non-zero weight.
+ * @param pop_weights: The non-zero weights.
+ * @param good_lams: The indices of the unmasked wavelengths.
+ * @param npop: The number of populations.
+ * @param chunk_len: The number of unmasked wavelengths in each chunk.
+ * @param out: The zero initialised (npop, nlam) output array.
+ * @param nthreads: The number of threads to use.
+ */
+#ifdef WITH_OPENMP
+template <typename GridReal, typename OutT>
+static void population_spectra_loop_omp(GridProps *grid_props,
+                                        const std::vector<int> &row_start,
+                                        const std::vector<int> &pop_inds,
+                                        const std::vector<double> &pop_weights,
+                                        const std::vector<int> &good_lams,
+                                        const int npop, const int chunk_len,
+                                        OutT *out, const int nthreads) {
+
+  /* Loop over the chunks of wavelengths, sharing them between threads. */
+  const int ngood = static_cast<int>(good_lams.size());
+#pragma omp parallel for num_threads(nthreads) schedule(static)
+  for (int start = 0; start < ngood; start += chunk_len) {
+    population_spectra_chunk<GridReal, OutT>(
+        grid_props, row_start, pop_inds, pop_weights, good_lams, npop, start,
+        std::min(chunk_len, ngood - start), out);
+  }
+}
+#endif /* WITH_OPENMP */
+
+/**
+ * @brief Contract each population's grid weights with the grid spectra.
+ *
+ * This is out (npop, nlam) = weights (npop, grid size) x spectra (grid size,
+ * nlam). The wavelengths are split into chunks small enough that a chunk of
+ * every population's spectrum stays in cache, which are contracted one at a
+ * time (see population_spectra_chunk).
+ *
+ * This is a wrapper which calls the correct function based on the number of
+ * threads requested and whether OpenMP is available.
  *
  * @tparam GridReal The floating-point type of the grid spectra and weights.
  * @tparam OutT The floating-point type stored in the output buffer.
@@ -261,14 +273,12 @@ static void population_spectra_loop(GridProps *grid_props,
 
   tic("population_spectra_loop");
 
-  const GridReal *__restrict grid_spectra =
-      grid_props->get_spectra<GridReal>();
-  const size_t nlam = static_cast<size_t>(grid_props->nlam);
+  const int nlam = grid_props->nlam;
   const int grid_size = grid_props->size;
 
   /* Collect the non-zero weights of each grid point (as compressed rows
-   * of population indices and weights) so the loop below only visits the
-   * grid points and populations that contribute. */
+   * of population indices and weights) so the loops only visit the grid
+   * points and populations that contribute. */
   std::vector<int> row_start(grid_size + 1, 0);
   std::vector<int> pop_inds;
   std::vector<double> pop_weights;
@@ -287,12 +297,11 @@ static void population_spectra_loop(GridProps *grid_props,
   /* Collect the wavelengths we actually need to compute. */
   std::vector<int> good_lams;
   good_lams.reserve(nlam);
-  for (size_t ilam = 0; ilam < nlam; ilam++) {
-    if (!grid_props->lam_is_masked(static_cast<int>(ilam))) {
-      good_lams.push_back(static_cast<int>(ilam));
+  for (int ilam = 0; ilam < nlam; ilam++) {
+    if (!grid_props->lam_is_masked(ilam)) {
+      good_lams.push_back(ilam);
     }
   }
-  const bool has_lam_mask = good_lams.size() != nlam;
   const int ngood = static_cast<int>(good_lams.size());
 
   /* Split the wavelengths into chunks, at least one per thread and short
@@ -301,91 +310,192 @@ static void population_spectra_loop(GridProps *grid_props,
   const int max_len = std::max(64, 32768 / std::max(npop, 1));
   const int nchunks = std::max(
       {1, std::min(ngood, nthreads), (ngood + max_len - 1) / max_len});
-  const int chunk_len = (ngood + nchunks - 1) / nchunks;
+  const int chunk_len = std::max(1, (ngood + nchunks - 1) / nchunks);
+
+  /* Call the correct function for the configuration/number of threads. */
 
 #ifdef WITH_OPENMP
-#pragma omp parallel for num_threads(nthreads) if (nthreads > 1) \
-    schedule(static)
-#endif
-  for (int ichunk = 0; ichunk < nchunks; ichunk++) {
-    const int start = ichunk * chunk_len;
-    const int len = std::min(ngood, start + chunk_len) - start;
-    if (len <= 0) {
-      continue;
-    }
-    std::vector<double> accum(static_cast<size_t>(npop) * len, 0.0);
-    std::vector<double> seg_buf(has_lam_mask ? len : 0);
 
-    /* Add each grid point's spectrum to every population weighting it. */
-    for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
-      const int first = row_start[grid_ind];
-      const int last = row_start[grid_ind + 1];
-      if (first == last) {
-        continue;
-      }
-      const GridReal *__restrict row =
-          grid_spectra + static_cast<size_t>(grid_ind) * nlam;
-
-      /* Gather this chunk of the row if wavelengths are masked. */
-      if (has_lam_mask) {
-        for (int j = 0; j < len; j++) {
-          seg_buf[j] = static_cast<double>(row[good_lams[start + j]]);
-        }
-      }
-
-      for (int k = first; k < last; k++) {
-        const double weight = pop_weights[k];
-        double *__restrict acc =
-            accum.data() + static_cast<size_t>(pop_inds[k]) * len;
-        if (has_lam_mask) {
-          const double *__restrict seg = seg_buf.data();
-#ifdef WITH_OPENMP
-#pragma omp simd
-#endif
-          for (int j = 0; j < len; j++) {
-            acc[j] += weight * seg[j];
-          }
-        } else {
-          const GridReal *__restrict seg = row + start;
-#ifdef WITH_OPENMP
-#pragma omp simd
-#endif
-          for (int j = 0; j < len; j++) {
-            acc[j] += weight * static_cast<double>(seg[j]);
-          }
-        }
-      }
-    }
-
-    /* Write this chunk of every population's spectrum. */
-    for (int ipop = 0; ipop < npop; ipop++) {
-      const double *acc = accum.data() + static_cast<size_t>(ipop) * len;
-      OutT *pop_out = out + static_cast<size_t>(ipop) * nlam;
-      for (int j = 0; j < len; j++) {
-        pop_out[good_lams[start + j]] = static_cast<OutT>(acc[j]);
-      }
-    }
+  /* If we have multiple threads and OpenMP we can parallelise. */
+  if (nthreads > 1) {
+    population_spectra_loop_omp<GridReal, OutT>(
+        grid_props, row_start, pop_inds, pop_weights, good_lams, npop,
+        chunk_len, out, nthreads);
   }
-#ifndef WITH_OPENMP
+  /* Otherwise there's no point paying the OpenMP overhead. */
+  else {
+    population_spectra_loop_serial<GridReal, OutT>(
+        grid_props, row_start, pop_inds, pop_weights, good_lams, npop,
+        chunk_len, out);
+  }
+
+#else
+
   (void)nthreads;
+
+  /* We don't have OpenMP, just call the serial version. */
+  population_spectra_loop_serial<GridReal, OutT>(
+      grid_props, row_start, pop_inds, pop_weights, good_lams, npop, chunk_len,
+      out);
+
 #endif
 
   toc("population_spectra_loop");
 }
 
 /**
- * @brief Contract a single set of grid weights with the grid spectra.
+ * @brief Contract the grid weights with one block of the grid spectra.
  *
- * This is the integrated (all populations summed) case. With a single set of
- * weights the product is memory bound, so rather than a BLAS gemv we walk
- * the grid spectra row by row, skipping grid points with zero weight. Many
- * SFZHs only touch a small part of the grid (e.g. a single metallicity or a
- * young burst), which a dense BLAS product can't exploit. With OpenMP the
- * wavelengths are split into one block per thread.
+ * We walk the grid spectra row by row, skipping grid points with zero
+ * weight. Many SFZHs only touch a small part of the grid (e.g. a single
+ * metallicity or a young burst), which a dense BLAS product can't exploit.
  *
  * Accumulation happens in double precision before being written to the
  * output at OutT. Masked wavelengths are skipped and left untouched in the
  * (zero initialised) output.
+ *
+ * @tparam GridReal The floating-point type of the grid spectra and weights.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
+ * @param grid_props: The grid properties.
+ * @param weights: The grid weights.
+ * @param good_lams: The indices of the unmasked wavelengths.
+ * @param start: The first entry of good_lams in this block.
+ * @param len: The number of entries of good_lams in this block.
+ * @param out: The zero initialised (nlam,) output array.
+ */
+template <typename GridReal, typename OutT>
+static inline void integrated_spectra_block(GridProps *grid_props,
+                                            const GridReal *weights,
+                                            const std::vector<int> &good_lams,
+                                            const int start, const int len,
+                                            OutT *out) {
+
+  /* Unpack the grid spectra and their dimensions. */
+  const GridReal *__restrict grid_spectra =
+      grid_props->get_spectra<GridReal>();
+  const size_t nlam = static_cast<size_t>(grid_props->nlam);
+  const int grid_size = grid_props->size;
+
+  /* Without a wavelength mask the block is a contiguous segment. */
+  const bool has_lam_mask = good_lams.size() != nlam;
+
+  /* Accumulate this block in double precision. */
+  std::vector<double> accum(len, 0.0);
+  double *__restrict acc = accum.data();
+
+  /* Add each grid point's spectrum weighted by its grid weight. */
+  for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
+    /* Skip grid points the populations put no mass on. */
+    const double weight = static_cast<double>(weights[grid_ind]);
+    if (weight <= 0.0) {
+      continue;
+    }
+
+    /* Get this grid point's spectrum. */
+    const GridReal *__restrict row =
+        grid_spectra + static_cast<size_t>(grid_ind) * nlam;
+
+    /* With a wavelength mask gather the good wavelengths, otherwise the
+     * block is a contiguous segment we can vectorise over. */
+    if (has_lam_mask) {
+      for (int j = 0; j < len; j++) {
+        acc[j] += weight * static_cast<double>(row[good_lams[start + j]]);
+      }
+    } else {
+      const GridReal *__restrict seg = row + start;
+#ifdef WITH_OPENMP
+#pragma omp simd
+#endif
+      for (int j = 0; j < len; j++) {
+        acc[j] += weight * static_cast<double>(seg[j]);
+      }
+    }
+  }
+
+  /* Write this block of the spectrum. */
+  for (int j = 0; j < len; j++) {
+    out[good_lams[start + j]] = static_cast<OutT>(acc[j]);
+  }
+}
+
+/**
+ * @brief Contract a single set of grid weights with the grid spectra.
+ *
+ * This is the serial version of the function.
+ *
+ * @tparam GridReal The floating-point type of the grid spectra and weights.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
+ * @param grid_props: The grid properties.
+ * @param weights: The grid weights.
+ * @param good_lams: The indices of the unmasked wavelengths.
+ * @param out: The zero initialised (nlam,) output array.
+ */
+template <typename GridReal, typename OutT>
+static void integrated_spectra_loop_serial(GridProps *grid_props,
+                                           const GridReal *weights,
+                                           const std::vector<int> &good_lams,
+                                           OutT *out) {
+
+  /* Every unmasked wavelength is a single block. */
+  integrated_spectra_block<GridReal, OutT>(
+      grid_props, weights, good_lams, /*start=*/0,
+      static_cast<int>(good_lams.size()), out);
+}
+
+/**
+ * @brief Contract a single set of grid weights with the grid spectra.
+ *
+ * This is the parallel version of the function.
+ *
+ * The unmasked wavelengths are split into one block per thread. Each block
+ * writes to its own wavelengths of the output so there are no races.
+ *
+ * @tparam GridReal The floating-point type of the grid spectra and weights.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
+ * @param grid_props: The grid properties.
+ * @param weights: The grid weights.
+ * @param good_lams: The indices of the unmasked wavelengths.
+ * @param out: The zero initialised (nlam,) output array.
+ * @param nthreads: The number of threads to use.
+ */
+#ifdef WITH_OPENMP
+template <typename GridReal, typename OutT>
+static void integrated_spectra_loop_omp(GridProps *grid_props,
+                                        const GridReal *weights,
+                                        const std::vector<int> &good_lams,
+                                        OutT *out, const int nthreads) {
+
+  /* Split the wavelengths into one block per thread. */
+  const int ngood = static_cast<int>(good_lams.size());
+  const int nblocks = std::max(1, std::min(ngood, nthreads));
+  const int block_len = (ngood + nblocks - 1) / nblocks;
+
+#pragma omp parallel for num_threads(nthreads) schedule(static)
+  for (int iblock = 0; iblock < nblocks; iblock++) {
+    /* Get this block's range of good wavelengths (the last may be short,
+     * or empty). */
+    const int start = iblock * block_len;
+    const int len = std::min(ngood, start + block_len) - start;
+    if (len <= 0) {
+      continue;
+    }
+
+    /* Contract the weights with this block of the spectra. */
+    integrated_spectra_block<GridReal, OutT>(grid_props, weights, good_lams,
+                                             start, len, out);
+  }
+}
+#endif /* WITH_OPENMP */
+
+/**
+ * @brief Contract a single set of grid weights with the grid spectra.
+ *
+ * This is the integrated (all populations summed) case. It is a wrapper
+ * which calls the correct function based on the number of threads requested
+ * and whether OpenMP is available.
  *
  * @tparam GridReal The floating-point type of the grid spectra and weights.
  * @tparam OutT The floating-point type stored in the output buffer.
@@ -402,69 +512,38 @@ static void integrated_spectra_loop(GridProps *grid_props,
 
   tic("integrated_spectra_loop");
 
-  const GridReal *__restrict grid_spectra =
-      grid_props->get_spectra<GridReal>();
-  const size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const int grid_size = grid_props->size;
-
   /* Collect the wavelengths we actually need to compute. */
   std::vector<int> good_lams;
-  good_lams.reserve(nlam);
-  for (size_t ilam = 0; ilam < nlam; ilam++) {
-    if (!grid_props->lam_is_masked(static_cast<int>(ilam))) {
-      good_lams.push_back(static_cast<int>(ilam));
+  good_lams.reserve(grid_props->nlam);
+  for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
+    if (!grid_props->lam_is_masked(ilam)) {
+      good_lams.push_back(ilam);
     }
   }
-  const bool has_lam_mask = good_lams.size() != nlam;
-  const int ngood = static_cast<int>(good_lams.size());
 
-  /* Split the wavelengths into one block per thread. */
-  const int nblocks = std::max(1, std::min(ngood, nthreads));
-  const int block_len = (ngood + nblocks - 1) / nblocks;
+  /* Call the correct function for the configuration/number of threads. */
 
 #ifdef WITH_OPENMP
-#pragma omp parallel for num_threads(nthreads) if (nthreads > 1) \
-    schedule(static)
-#endif
-  for (int iblock = 0; iblock < nblocks; iblock++) {
-    const int start = iblock * block_len;
-    const int len = std::min(ngood, start + block_len) - start;
-    if (len <= 0) {
-      continue;
-    }
-    std::vector<double> accum(len, 0.0);
-    double *__restrict acc = accum.data();
 
-    /* Add each grid point's spectrum weighted by its grid weight. */
-    for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
-      const double weight = static_cast<double>(weights[grid_ind]);
-      if (weight <= 0.0) {
-        continue;
-      }
-      const GridReal *__restrict row =
-          grid_spectra + static_cast<size_t>(grid_ind) * nlam;
-      if (has_lam_mask) {
-        for (int j = 0; j < len; j++) {
-          acc[j] += weight * static_cast<double>(row[good_lams[start + j]]);
-        }
-      } else {
-        const GridReal *__restrict seg = row + start;
-#ifdef WITH_OPENMP
-#pragma omp simd
-#endif
-        for (int j = 0; j < len; j++) {
-          acc[j] += weight * static_cast<double>(seg[j]);
-        }
-      }
-    }
-
-    /* Write this block of the spectrum. */
-    for (int j = 0; j < len; j++) {
-      out[good_lams[start + j]] = static_cast<OutT>(acc[j]);
-    }
+  /* If we have multiple threads and OpenMP we can parallelise. */
+  if (nthreads > 1) {
+    integrated_spectra_loop_omp<GridReal, OutT>(grid_props, weights, good_lams,
+                                                out, nthreads);
   }
-#ifndef WITH_OPENMP
+  /* Otherwise there's no point paying the OpenMP overhead. */
+  else {
+    integrated_spectra_loop_serial<GridReal, OutT>(grid_props, weights,
+                                                   good_lams, out);
+  }
+
+#else
+
   (void)nthreads;
+
+  /* We don't have OpenMP, just call the serial version. */
+  integrated_spectra_loop_serial<GridReal, OutT>(grid_props, weights,
+                                                 good_lams, out);
+
 #endif
 
   toc("integrated_spectra_loop");
@@ -479,13 +558,17 @@ static void integrated_spectra_loop(GridProps *grid_props,
  *
  * @param np_grid_spectra: The SPS spectra array.
  * @param grid_tuple: The tuple of grid axis arrays (log10 where flagged).
- * @param edges_tuple: The tuple of bin edge arrays (linear units), in the
- *                     same order as grid_tuple.
+ * @param edges_tuple: The tuple of bin edge arrays (linear units), one per
+ *                     grid axis.
  * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
- * @param log_flags: One boolean per axis flagging log10 grid axes.
+ * @param log_flags: One boolean per grid axis flagging log10 grid axes.
+ * @param bin_axes: The input (masses/mask) axis matching each grid axis.
+ * @param unit_scales: The factor converting each grid axis' edges into the
+ *                     grid axis' units.
  * @param nthreads: The number of threads to use.
  * @param np_grid_weights: Precomputed grid weights or None.
- * @param mask: A boolean mask with the shape of the masses or None.
+ * @param mask: The allowed (nmask, 2) range along the first nmask input
+ *              axes or None.
  * @param np_lam_mask: A wavelength mask or None.
  * @param out_dtype: Requested floating-point dtype for the returned spectrum.
  * @param prop_names: Optional names for the grid axes (for error messages).
@@ -499,16 +582,25 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
   /* We don't need the self argument but it has to be there. */
   (void)self;
 
+  /* Parse the arguments (prop_names is optional). */
   int nthreads;
-  PyObject *spectra_obj, *grid_tuple, *edges_tuple, *log_flags;
+  PyObject *spectra_obj, *grid_tuple, *edges_tuple, *log_flags, *bin_axes;
+  PyObject *unit_scales;
   PyObject *weights_obj, *mask_obj, *lam_mask_obj, *out_dtype;
   PyObject *prop_names = NULL;
   PyArrayObject *np_masses;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiOOOO|O", &spectra_obj, &grid_tuple,
-                        &edges_tuple, &np_masses, &log_flags, &nthreads,
-                        &weights_obj, &mask_obj, &lam_mask_obj, &out_dtype,
-                        &prop_names)) {
+  if (!PyArg_ParseTuple(args, "OOOOOOOiOOOO|O", &spectra_obj, &grid_tuple,
+                        &edges_tuple, &np_masses, &log_flags, &bin_axes,
+                        &unit_scales, &nthreads, &weights_obj, &mask_obj,
+                        &lam_mask_obj, &out_dtype, &prop_names)) {
+    return NULL;
+  }
+
+  /* Precomputed weights are used as they are, so a mask can't be applied. */
+  if (weights_obj != Py_None && mask_obj != Py_None) {
+    PyErr_SetString(PyExc_ValueError,
+                    "A mask can't be applied to precomputed grid weights.");
     return NULL;
   }
 
@@ -518,7 +610,8 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Extract the grid struct. */
+  /* Extract the grid struct, treating None weights and wavelength mask as
+   * absent. */
   PyArrayObject *np_grid_weights =
       weights_obj == Py_None ? NULL
                              : reinterpret_cast<PyArrayObject *>(weights_obj);
@@ -531,14 +624,13 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
       /*np_lam*/ NULL, np_lam_mask, nlam, np_grid_weights, prop_names));
   RETURN_IF_PYERR();
 
-  /* Extract the populations. */
-  Populations pops;
-  if (!build_populations(edges_tuple, np_masses, log_flags, mask_obj,
-                         grid_props.get(), pops)) {
-    return NULL;
-  }
+  /* Create the object that holds the population properties. */
+  auto pops = std::unique_ptr<Populations>(
+      new Populations(edges_tuple, np_masses, log_flags, bin_axes, unit_scales,
+                      mask_obj, prop_names, grid_props->ndim));
+  RETURN_IF_PYERR();
 
-  /* Resolve the dtypes. */
+  /* Resolve the dtypes, defaulting the grid to float64. */
   int grid_typenum = grid_props->get_float_typenum();
   if (grid_typenum == -1) {
     grid_typenum = NPY_FLOAT64;
@@ -551,24 +643,33 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
   /* Compute the grid weights (unless we were given them) and contract them
    * with the grid spectra. */
   PyArrayObject *np_spectra = NULL;
-  dispatch_float(pops.float_typenum, [&](auto p) {
+  dispatch_float(pops->get_float_typenum(), [&](auto p) {
     dispatch_float(grid_typenum, [&](auto g) {
       dispatch_float(output_typenum, [&](auto o) {
         using PopReal = decltype(p);
         using GridReal = decltype(g);
         using OutT = decltype(o);
+
+        /* Get the grid weights buffer (either the precomputed weights or a
+         * new zeroed array). */
         GridReal *grid_weights = grid_props->get_grid_weights<GridReal>();
         if (grid_weights == NULL || PyErr_Occurred()) {
           return;
         }
+
+        /* Spread the populations onto the grid if we weren't given the
+         * weights. */
         if (grid_props->need_grid_weights()) {
-          weight_loop_bic<PopReal, GridReal, GridReal>(grid_props.get(), &pops,
-                                                       grid_props->size,
-                                                       grid_weights, nthreads);
+          weight_loop_bic<PopReal, GridReal, GridReal>(
+              grid_props.get(), pops.get(), grid_props->size, grid_weights,
+              nthreads);
           if (PyErr_Occurred()) {
             return;
           }
         }
+
+        /* Allocate the zeroed output spectrum and contract the weights with
+         * the grid spectra into it. */
         npy_intp np_dims[1] = {nlam};
         np_spectra =
             (PyArrayObject *)PyArray_ZEROS(1, np_dims, output_typenum, 0);
@@ -582,6 +683,7 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
     });
   });
 
+  /* Make sure a failure inside the dispatch always surfaces as an error. */
   if (np_spectra == NULL) {
     if (!PyErr_Occurred()) {
       PyErr_SetString(PyExc_RuntimeError,
@@ -607,14 +709,18 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
  *
  * @param np_grid_spectra: The SPS spectra array.
  * @param grid_tuple: The tuple of grid axis arrays (log10 where flagged).
- * @param edges_tuple: The tuple of bin edge arrays (linear units), in the
- *                     same order as grid_tuple.
+ * @param edges_tuple: The tuple of bin edge arrays (linear units), one per
+ *                     grid axis.
  * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
- * @param log_flags: One boolean per axis flagging log10 grid axes.
+ * @param log_flags: One boolean per grid axis flagging log10 grid axes.
+ * @param bin_axes: The input (masses/mask) axis matching each grid axis.
+ * @param unit_scales: The factor converting each grid axis' edges into the
+ *                     grid axis' units.
  * @param nthreads: The number of threads to use.
  * @param np_pop_weights: Precomputed (npop, *grid_shape) weights at the grid
  *                        dtype, or None.
- * @param mask: A boolean mask with the shape of the masses or None.
+ * @param mask: The allowed (nmask, 2) range along the first nmask input
+ *              axes or None.
  * @param np_lam_mask: A wavelength mask or None.
  * @param out_dtype: Requested floating-point dtype for the returned spectra.
  * @param prop_names: Optional names for the grid axes (for error messages).
@@ -629,16 +735,25 @@ PyObject *compute_population_seds(PyObject *self, PyObject *args) {
   /* We don't need the self argument but it has to be there. */
   (void)self;
 
+  /* Parse the arguments (prop_names is optional). */
   int nthreads;
-  PyObject *spectra_obj, *grid_tuple, *edges_tuple, *log_flags;
+  PyObject *spectra_obj, *grid_tuple, *edges_tuple, *log_flags, *bin_axes;
+  PyObject *unit_scales;
   PyObject *weights_obj, *mask_obj, *lam_mask_obj, *out_dtype;
   PyObject *prop_names = NULL;
   PyArrayObject *np_masses;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiOOOO|O", &spectra_obj, &grid_tuple,
-                        &edges_tuple, &np_masses, &log_flags, &nthreads,
-                        &weights_obj, &mask_obj, &lam_mask_obj, &out_dtype,
-                        &prop_names)) {
+  if (!PyArg_ParseTuple(args, "OOOOOOOiOOOO|O", &spectra_obj, &grid_tuple,
+                        &edges_tuple, &np_masses, &log_flags, &bin_axes,
+                        &unit_scales, &nthreads, &weights_obj, &mask_obj,
+                        &lam_mask_obj, &out_dtype, &prop_names)) {
+    return NULL;
+  }
+
+  /* Precomputed weights are used as they are, so a mask can't be applied. */
+  if (weights_obj != Py_None && mask_obj != Py_None) {
+    PyErr_SetString(PyExc_ValueError,
+                    "A mask can't be applied to precomputed grid weights.");
     return NULL;
   }
 
@@ -659,12 +774,11 @@ PyObject *compute_population_seds(PyObject *self, PyObject *args) {
                     /*np_grid_weights*/ NULL, prop_names));
   RETURN_IF_PYERR();
 
-  /* Extract the populations. */
-  Populations pops;
-  if (!build_populations(edges_tuple, np_masses, log_flags, mask_obj,
-                         grid_props.get(), pops)) {
-    return NULL;
-  }
+  /* Create the object that holds the population properties. */
+  auto pops = std::unique_ptr<Populations>(
+      new Populations(edges_tuple, np_masses, log_flags, bin_axes, unit_scales,
+                      mask_obj, prop_names, grid_props->ndim));
+  RETURN_IF_PYERR();
 
   /* Resolve the dtypes. */
   int grid_typenum = grid_props->get_float_typenum();
@@ -677,7 +791,7 @@ PyObject *compute_population_seds(PyObject *self, PyObject *args) {
   }
 
   /* Allocate the output. */
-  npy_intp np_dims[2] = {pops.npop, nlam};
+  npy_intp np_dims[2] = {pops->npop, nlam};
   PyArrayObject *np_pop_spectra =
       (PyArrayObject *)PyArray_ZEROS(2, np_dims, output_typenum, 0);
   if (np_pop_spectra == NULL) {
@@ -688,7 +802,7 @@ PyObject *compute_population_seds(PyObject *self, PyObject *args) {
    * spectra they are contracted with), either the ones we were given or new
    * ones we compute below. */
   npy_intp np_weight_dims[MAX_GRID_NDIM + 1];
-  np_weight_dims[0] = pops.npop;
+  np_weight_dims[0] = pops->npop;
   for (int idim = 0; idim < grid_props->ndim; idim++) {
     np_weight_dims[idim + 1] = grid_props->dims[idim];
   }
@@ -704,7 +818,7 @@ PyObject *compute_population_seds(PyObject *self, PyObject *args) {
         PyArray_NDIM(np_pop_weights) != grid_props->ndim + 1 ||
         !PyArray_IS_C_CONTIGUOUS(np_pop_weights) ||
         PyArray_SIZE(np_pop_weights) !=
-            static_cast<npy_intp>(pops.npop) * grid_props->size) {
+            static_cast<npy_intp>(pops->npop) * grid_props->size) {
       Py_DECREF(np_pop_spectra);
       PyErr_SetString(PyExc_ValueError,
                       "pop_weights must be a contiguous (npop, *grid_shape) "
@@ -723,7 +837,7 @@ PyObject *compute_population_seds(PyObject *self, PyObject *args) {
 
   /* Spread the populations onto the grid (unless we were given the weights)
    * and contract with the spectra. */
-  dispatch_float(pops.float_typenum, [&](auto p) {
+  dispatch_float(pops->get_float_typenum(), [&](auto p) {
     dispatch_float(grid_typenum, [&](auto g) {
       dispatch_float(output_typenum, [&](auto o) {
         using PopReal = decltype(p);
@@ -733,13 +847,13 @@ PyObject *compute_population_seds(PyObject *self, PyObject *args) {
             static_cast<GridReal *>(PyArray_DATA(np_pop_weights));
         if (!have_weights) {
           weight_loop_bic_per_population<PopReal, GridReal, GridReal>(
-              grid_props.get(), &pops, weights, nthreads);
+              grid_props.get(), pops.get(), weights, nthreads);
           if (PyErr_Occurred()) {
             return;
           }
         }
         population_spectra_loop<GridReal, OutT>(
-            grid_props.get(), weights, pops.npop,
+            grid_props.get(), weights, pops->npop,
             static_cast<OutT *>(PyArray_DATA(np_pop_spectra)), nthreads);
       });
     });
@@ -764,12 +878,16 @@ PyObject *compute_population_seds(PyObject *self, PyObject *args) {
  * population's SFZH or remap it onto new axes).
  *
  * @param grid_tuple: The tuple of grid axis arrays (log10 where flagged).
- * @param edges_tuple: The tuple of bin edge arrays (linear units), in the
- *                     same order as grid_tuple.
+ * @param edges_tuple: The tuple of bin edge arrays (linear units), one per
+ *                     grid axis.
  * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
- * @param log_flags: One boolean per axis flagging log10 grid axes.
+ * @param log_flags: One boolean per grid axis flagging log10 grid axes.
+ * @param bin_axes: The input (masses/mask) axis matching each grid axis.
+ * @param unit_scales: The factor converting each grid axis' edges into the
+ *                     grid axis' units.
  * @param nthreads: The number of threads to use.
- * @param mask: A boolean mask with the shape of the masses or None.
+ * @param mask: The allowed (nmask, 2) range along the first nmask input
+ *              axes or None.
  * @param prop_names: Optional names for the grid axes (for error messages).
  *
  * @return The grid weights (with the grid's shape and dtype).
@@ -781,14 +899,16 @@ PyObject *compute_parametric_weights(PyObject *self, PyObject *args) {
   /* We don't need the self argument but it has to be there. */
   (void)self;
 
+  /* Parse the arguments (prop_names is optional). */
   int nthreads;
-  PyObject *grid_tuple, *edges_tuple, *log_flags, *mask_obj;
+  PyObject *grid_tuple, *edges_tuple, *log_flags, *bin_axes, *unit_scales;
+  PyObject *mask_obj;
   PyObject *prop_names = NULL;
   PyArrayObject *np_masses;
 
-  if (!PyArg_ParseTuple(args, "OOOOiO|O", &grid_tuple, &edges_tuple,
-                        &np_masses, &log_flags, &nthreads, &mask_obj,
-                        &prop_names)) {
+  if (!PyArg_ParseTuple(args, "OOOOOOiO|O", &grid_tuple, &edges_tuple,
+                        &np_masses, &log_flags, &bin_axes, &unit_scales,
+                        &nthreads, &mask_obj, &prop_names)) {
     return NULL;
   }
 
@@ -799,36 +919,41 @@ PyObject *compute_parametric_weights(PyObject *self, PyObject *args) {
                     /*np_grid_weights*/ NULL, prop_names));
   RETURN_IF_PYERR();
 
-  /* Extract the populations. */
-  Populations pops;
-  if (!build_populations(edges_tuple, np_masses, log_flags, mask_obj,
-                         grid_props.get(), pops)) {
-    return NULL;
-  }
+  /* Create the object that holds the population properties. */
+  auto pops = std::unique_ptr<Populations>(
+      new Populations(edges_tuple, np_masses, log_flags, bin_axes, unit_scales,
+                      mask_obj, prop_names, grid_props->ndim));
+  RETURN_IF_PYERR();
 
-  /* Resolve the grid dtype. */
+  /* Resolve the grid dtype, defaulting to float64. */
   int grid_typenum = grid_props->get_float_typenum();
   if (grid_typenum == -1) {
     grid_typenum = NPY_FLOAT64;
   }
 
   /* Spread the populations onto the grid. */
-  dispatch_float(pops.float_typenum, [&](auto p) {
+  dispatch_float(pops->get_float_typenum(), [&](auto p) {
     dispatch_float(grid_typenum, [&](auto g) {
       using PopReal = decltype(p);
       using GridReal = decltype(g);
+
+      /* Get a new zeroed grid weights buffer. */
       GridReal *grid_weights = grid_props->get_grid_weights<GridReal>();
       if (grid_weights == NULL || PyErr_Occurred()) {
         return;
       }
+
+      /* Accumulate every population's bins into it. */
       weight_loop_bic<PopReal, GridReal, GridReal>(
-          grid_props.get(), &pops, grid_props->size, grid_weights, nthreads);
+          grid_props.get(), pops.get(), grid_props->size, grid_weights,
+          nthreads);
     });
   });
   RETURN_IF_PYERR();
 
   toc("compute_parametric_weights");
 
+  /* Hand the weights array back to Python. */
   return (PyObject *)grid_props->get_np_grid_weights();
 }
 
@@ -859,14 +984,30 @@ static struct PyModuleDef moduledef = {
     NULL,                                                  /* m_free */
 };
 
+/**
+ * @brief Initialise the parametric_spectra module.
+ *
+ * @return The module object, or NULL (with a Python error set) on failure.
+ */
 PyMODINIT_FUNC PyInit_parametric_spectra(void) {
+  /* Create the module. */
   PyObject *m = PyModule_Create(&moduledef);
   if (m == NULL) return NULL;
+
+  /* Declare the module safe to use without the GIL so importing it doesn't
+   * re-enable the GIL on free-threaded builds of Python. */
+#ifdef Py_GIL_DISABLED
+  PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED);
+#endif
+
+  /* Import numpy's C API. */
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);
     return NULL;
   }
+
+  /* Hook up the shared atomic timers if they are enabled. */
 #ifdef ATOMIC_TIMING
   if (import_toc_capsule() < 0) {
     Py_DECREF(m);

@@ -60,12 +60,11 @@ with_shift = galaxy.stars.spectra["nebular"]
 # Clear the spectra
 galaxy.clear_all_emissions()
 
-# Get the spectra without the velocity broadening (we could use the
-# set_vel_shift method on an EmissionModel to turn off the velocity shift
-# but here we demonstrate how to do it with the get_spectra method's
-# overides)
+# Get the spectra without the velocity broadening by turning off the
+# velocity shift on the model
+model.set_vel_shift(False, set_all=True)
 start_without_shift = time.time()
-galaxy.stars.get_spectra(model, vel_shift=False)
+galaxy.stars.get_spectra(model)
 print(
     "Time to get spectra without velocity shift:"
     f" {time.time() - start_without_shift}"
@@ -80,8 +79,10 @@ plot_spectra(
     show=True,
 )
 
-# Exagerate the velocities for the next part
+# Exagerate the velocities for the next part and turn the velocity shift
+# back on
 galaxy.stars.velocities *= 10
+model.set_vel_shift(True, set_all=True)
 
 # Compute the velocity broadened spectra for a range of random rotations
 # and plot the difference in the spectra
@@ -93,7 +94,7 @@ for phi, theta in zip(phis, thetas):
     galaxy.stars.rotate_particles(phi, theta)
 
     # Get the spectra
-    spec = galaxy.stars.get_spectra(model, vel_shift=True)
+    spec = galaxy.stars.get_spectra(model)
 
     # Store it for plotting
     spectra[f"phi={phi:.2f}, theta={theta:.2f}"] = spec

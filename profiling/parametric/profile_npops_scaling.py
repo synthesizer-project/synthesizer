@@ -103,7 +103,7 @@ def profile_npops(
     labels = {
         "construction": [
             "Functions (SFH, ZDist)",
-            "Binned (from_sfzh)",
+            "Binned (sfzh)",
             "Combined (from_populations)",
         ],
         "spectra": [
@@ -149,8 +149,8 @@ def profile_npops(
             sfzhs = [p.sfzh for p in pops]
             start = time.perf_counter()
             for sfzh in sfzhs:
-                Stars.from_sfzh(grid.log10ages, grid.metallicities, sfzh)
-            iter_times["construction"]["Binned (from_sfzh)"].append(
+                Stars(grid.log10ages, grid.metallicities, sfzh=sfzh)
+            iter_times["construction"]["Binned (sfzh)"].append(
                 time.perf_counter() - start
             )
 
