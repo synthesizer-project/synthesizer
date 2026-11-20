@@ -85,6 +85,32 @@ class TestGridInitialization:
         assert len(grid.spectra) == 0
         assert grid.lam is None
 
+    def test_lines_only_grid_without_continua(self, tmp_path, test_grid):
+        """Test a grid with lines but no spectra or line continua loads."""
+        grid_path = tmp_path / "lines_only_grid.hdf5"
+
+        with (
+            h5py.File(test_grid.grid_filename, "r") as src,
+            h5py.File(grid_path, "w") as dst,
+        ):
+            for key, value in src.attrs.items():
+                dst.attrs[key] = value
+            for key in src.keys():
+                if key not in ("spectra", "lines"):
+                    src.copy(key, dst)
+            for key in ("id", "wavelength", "luminosity"):
+                src.copy(f"lines/{key}", dst, name=f"lines/{key}")
+
+        with pytest.warns(RuntimeWarning, match="no line continua"):
+            grid = Grid(grid_path.name, grid_dir=tmp_path, ignore_spectra=True)
+
+        np.testing.assert_allclose(
+            grid.line_lums["nebular"], test_grid.line_lums["nebular"]
+        )
+        for key in ("nebular", "linecont", "nebular_continuum", "transmitted"):
+            assert np.all(grid.line_conts[key] == 0)
+            assert grid.line_conts[key].units == erg / s / Hz
+
     def test_grid_with_ignore_lines(self, test_grid_name):
         """Test Grid initialization with ignore_lines=True."""
         grid = Grid(test_grid_name, ignore_lines=True)

@@ -698,7 +698,28 @@ class Grid:
             # Get the units, we only do this once since all the
             # luminosities and continuums will have the same units
             lum_units = hf["lines"]["luminosity"].attrs.get("Units")
-            cont_units = hf["lines"]["nebular_continuum"].attrs.get("Units")
+
+            # Grids generated without spectra have no line continua (they
+            # are derived from the spectra), in which case we use zeros
+            # so every line emission still has a continuum to extract
+            has_conts = all(
+                key in hf["lines"]
+                for key in ("nebular_continuum", "transmitted")
+            )
+            if has_conts:
+                cont_units = hf["lines"]["nebular_continuum"].attrs.get(
+                    "Units"
+                )
+            else:
+                cont_units = "erg/s/Hz"
+                warn("Grid has no line continua, line continua will be zero.")
+
+            def read_cont(key):
+                if has_conts:
+                    return self._read_floats(hf["lines"][key])
+                return np.zeros(
+                    self.line_lums["nebular"].shape, dtype=self._dtype
+                )
 
             # Read the nebular line luminosities and continuums
             self.line_lums["nebular"] = unyt_array(
@@ -706,7 +727,7 @@ class Grid:
                 lum_units,
             )
             self.line_conts["nebular"] = unyt_array(
-                self._read_floats(hf["lines"]["nebular_continuum"]),
+                read_cont("nebular_continuum"),
                 cont_units,
             )
 
@@ -728,7 +749,7 @@ class Grid:
                 lum_units,
             )
             self.line_conts["nebular_continuum"] = unyt_array(
-                self._read_floats(hf["lines"]["nebular_continuum"]),
+                read_cont("nebular_continuum"),
                 cont_units,
             )
 
@@ -739,7 +760,7 @@ class Grid:
                 lum_units,
             )
             self.line_conts["transmitted"] = unyt_array(
-                self._read_floats(hf["lines"]["transmitted"]),
+                read_cont("transmitted"),
                 cont_units,
             )
 
