@@ -1,5 +1,7 @@
 """A test suite for testing the Sed class."""
 
+import copy
+
 import numpy as np
 import pytest
 from astropy.cosmology import Planck18
@@ -8,7 +10,20 @@ from synthesizer.extensions.reductions import (
     combine_spectra_2d,
     reduce_particle_spectra,
 )
-from unyt import Hz, angstrom, c, cm, erg, km, m, nJy, pc, s
+from unyt import (
+    Hz,
+    Unit,
+    angstrom,
+    c,
+    cm,
+    erg,
+    km,
+    m,
+    nJy,
+    pc,
+    s,
+    unyt_array,
+)
 
 from synthesizer import exceptions
 from synthesizer.cosmology import get_luminosity_distance
@@ -159,6 +174,68 @@ def test_get_fnu0_handles_multidimensional_spectra():
     )
 
 
+def test_quantity_in_place_conversion_keeps_units_consistent():
+    """Converting a Quantity in place must not desync its stored units."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    sed = Sed(lam=lam, lnu=np.ones(8) * erg / s / Hz)
+
+    sed.lnu.convert_to_units("W/Hz")
+
+    # The public value carries the new units
+    assert sed.lnu.units == Unit("W/Hz")
+    assert np.allclose(sed.lnu.to("erg/s/Hz").value, 1.0)
+
+    # The private value is still in the internal unit system
+    assert np.allclose(sed._lnu, 1.0)
+
+
+def test_private_read_keeps_public_value_aliased():
+    """A private read of a converted Quantity must keep the public alias."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    sed = Sed(lam=lam, lnu=np.ones(8) * erg / s / Hz)
+
+    lnu = sed.lnu
+    lnu.convert_to_units("W/Hz")
+    sed._lnu
+
+    # The stored value was converted back in place rather than replaced
+    assert sed.lnu is lnu
+    assert lnu.units == erg / s / Hz
+
+
+def test_deepcopy_shares_units_and_copies_data():
+    """Deep copies must copy Quantity data but share the unit objects."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    sed = Sed(lam=lam, lnu=np.ones(8) * erg / s / Hz)
+
+    sed_copy = copy.deepcopy(sed)
+
+    assert sed_copy.lnu.units is sed.lnu.units
+    assert not np.shares_memory(sed_copy._lnu, sed._lnu)
+    assert np.array_equal(sed_copy.lnu, sed.lnu)
+
+
+def test_quantity_set_converts_in_place_without_copying():
+    """Setting a Quantity in other units must not duplicate the array."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.ones(8) * Unit("W/Hz")
+    sed = Sed(lam=lam, lnu=lnu)
+
+    # The caller's array is the stored array, converted in place
+    assert sed.lnu is lnu
+    assert lnu.units == erg / s / Hz
+    assert np.allclose(sed._lnu, 1e7)
+
+    # Read-only arrays can't be converted in place so fall back to a copy
+    ro = np.ones(8)
+    ro.flags.writeable = False
+    ro_lnu = unyt_array(ro, "W/Hz")
+    assert not ro_lnu.flags.writeable
+    sed.lnu = ro_lnu
+    assert ro_lnu.units == Unit("W/Hz")
+    assert np.allclose(sed._lnu, 1e7)
+
+
 def test_get_fnu0_reuses_final_contiguous_wavelength_buffers():
     """Rest-frame flux conversion should alias the final wavelength buffers."""
     lam = np.linspace(1000, 2000, 16)[::2] * angstrom
@@ -167,8 +244,8 @@ def test_get_fnu0_reuses_final_contiguous_wavelength_buffers():
     sed = Sed(lam=lam, lnu=lnu)
     sed.get_fnu0()
 
-    assert sed._obslam is sed._lam
-    assert sed._obsnu is sed._nu
+    assert np.shares_memory(sed._obslam, sed._lam)
+    assert np.shares_memory(sed._obsnu, sed._nu)
     assert sed._lam.flags.c_contiguous
     assert sed._nu.flags.c_contiguous
 
@@ -456,3 +533,91 @@ def test_get_fnu_peculiar_velocity_rejects_vel_shifted_sed():
 
     # Without a peculiar velocity the flux is computed as normal
     sed.get_fnu(Planck18, 1.0)
+
+
+def test_from_observed_treats_wavelengths_as_observer_frame():
+    """from_observed stores the observer frame and derives the rest frame."""
+    # Build a simple observer frame spectrum at z=1
+    z = 1.0
+    obslam = np.linspace(2000, 4000, 16) * angstrom
+    fnu = np.linspace(1.0, 16.0, 16) * nJy
+    lnu = np.linspace(1.0, 16.0, 16) * erg / s / Hz
+
+    sed = Sed.from_observed(obslam, fnu, z, rest_frame_lnu=lnu)
+
+    # The observer frame arrays are stored as given and the rest frame
+    # wavelengths are shifted back by (1 + z)
+    np.testing.assert_allclose(sed.obslam, obslam)
+    np.testing.assert_allclose(sed.lam, obslam / (1.0 + z))
+    np.testing.assert_allclose(sed.obsnu, sed.nu / (1.0 + z))
+    np.testing.assert_allclose(sed.fnu, fnu)
+    np.testing.assert_allclose(sed.lnu, lnu)
+    assert sed.redshift == z
+
+
+def test_from_observed_without_lnu_is_nan():
+    """from_observed leaves the luminosity NaN when it is not passed."""
+    # At z=0 the rest and observer frame wavelengths coincide
+    obslam = np.linspace(2000, 4000, 16) * angstrom
+    sed = Sed.from_observed(obslam, np.ones(16) * nJy, 0.0)
+
+    np.testing.assert_allclose(sed.lam, obslam)
+    assert np.isnan(sed.lnu).all()
+
+
+def test_from_observed_rejects_mismatched_shapes():
+    """from_observed raises on fluxes or luminosities of the wrong shape."""
+    obslam = np.linspace(2000, 4000, 16) * angstrom
+
+    # Fluxes not defined on the wavelengths
+    with pytest.raises(exceptions.InconsistentArguments):
+        Sed.from_observed(obslam, np.ones(8) * nJy, 1.0)
+
+    # Luminosities not matching the fluxes
+    with pytest.raises(exceptions.InconsistentArguments):
+        Sed.from_observed(
+            obslam,
+            np.ones(16) * nJy,
+            1.0,
+            rest_frame_lnu=np.ones(8) * erg / s / Hz,
+        )
+
+
+def test_get_resampled_observed_sed_uses_observer_frame():
+    """Observer frame resampling puts fnu exactly on the new wavelengths."""
+    # Emission only between 5000 and 6000 A in the rest frame, observed at
+    # z=1 so between 10000 and 12000 A in the observer frame
+    z = 1.0
+    lam = np.arange(1000.0, 20001.0, 10.0) * angstrom
+    inside = (lam >= 5000 * angstrom) & (lam <= 6000 * angstrom)
+    sed = Sed(lam, np.where(inside, 1e28, 0.0) * erg / s / Hz)
+    sed.get_fnu(Planck18, z)
+
+    # Resample onto an observer frame grid covering the emission
+    new_obslam = np.arange(9000.0, 13001.0, 10.0) * angstrom
+    resampled = sed.get_resampled_observed_sed(new_obslam)
+
+    # The observer frame grid is the one we asked for and the rest frame
+    # grid is that shifted back by (1 + z)
+    np.testing.assert_allclose(resampled.obslam, new_obslam)
+    np.testing.assert_allclose(resampled.lam, new_obslam / (1.0 + z))
+
+    # Both the flux and luminosity land in the emission window
+    seen = resampled.fnu.value > 0
+    assert seen.any()
+    assert resampled.obslam[seen].min() >= 9990.0 * angstrom
+    assert resampled.obslam[seen].max() <= 12010.0 * angstrom
+    np.testing.assert_array_equal(resampled.lnu.value > 0, seen)
+
+    # The resampled spectra keep the source precision
+    assert resampled._fnu.dtype == sed._fnu.dtype
+    assert resampled._lnu.dtype == sed._lnu.dtype
+
+
+def test_get_resampled_observed_sed_requires_fnu():
+    """Observer frame resampling raises without fluxes."""
+    lam = np.linspace(1000, 2000, 16) * angstrom
+    sed = Sed(lam, np.ones(16) * erg / s / Hz)
+
+    with pytest.raises(exceptions.MissingSpectraType):
+        sed.get_resampled_observed_sed(lam)

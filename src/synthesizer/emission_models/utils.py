@@ -87,6 +87,37 @@ def _apply_broadening_to_model(model, label, velocity_dispersion, kwargs):
     return broadened
 
 
+def check_removed_overrides(**overrides):
+    """Raise an error if any removed get_spectra/get_lines override is set.
+
+    Overriding the dust curves, optical depths, escape fractions, covering
+    fractions, masks or velocity shift of an emission model at the point
+    get_spectra or get_lines is called is no longer supported. These
+    arguments only remain so passing them raises a clear error rather than
+    being silently ignored.
+
+    Args:
+        **overrides (dict):
+            The removed override arguments, keyed by name, with their passed
+            values (None if they weren't passed).
+
+    Raises:
+        exceptions.InconsistentArguments:
+            If any of the overrides was passed.
+    """
+    # Find any overrides which were actually passed
+    passed = [name for name, value in overrides.items() if value is not None]
+    if len(passed) == 0:
+        return
+
+    raise exceptions.InconsistentArguments(
+        f"Passing {', '.join(passed)} to get_spectra or get_lines is no "
+        "longer supported. Modify the EmissionModel itself instead (e.g. "
+        "pass the parameter when creating the model, or use "
+        "set_vel_shift or add_mask), or set the parameter on the emitter."
+    )
+
+
 def cache_param(
     param: str,
     emitter: Component,

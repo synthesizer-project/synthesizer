@@ -14,7 +14,7 @@ Though some of these (such as ``stellar_library``, ``slopes``, ``photoionisation
 
     bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01 
 
-specifies that the grid is constructed using v2.2.1 of the `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ (BPASS) SPS model for the binary (bin) variant. This grid assumes the Chabrier (2003) IMF between 0.1 and 300 Msol. Photoionisation modelling is performed using v23.01 of the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code assuming our `default assumptions <https://github.com/synthesizer-project/syncretize/blob/main/src/synthesizer_grids/cloudy/params/c23.01-sps.yaml>`_. Certain SPS models also use multiple stellar spectral libraries, which we bring under sps_variant as well.
+specifies that the grid is constructed using v2.2.1 of the `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ (BPASS) SPS model for the binary (bin) variant. This grid assumes the Chabrier (2003) IMF between 0.1 and 300 Msol. Photoionisation modelling is performed using v23.01 of the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code assuming our `default assumptions <https://github.com/synthesizer-project/syncretize/blob/main/src/syncretize/cloudy/params/c23.01-sps.yaml>`_. Certain SPS models also use multiple stellar spectral libraries, which we bring under sps_variant as well.
 
 Initial Mass Function
 ---------------------
@@ -38,7 +38,7 @@ If an IMF you need is missing, please let us know by raising a feature request t
 
 Photoionisation modelling
 -------------------------
-All the photoionisation modelling in synthesizer currently uses the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code. It can simulate a range of ISM and ionisation conditions. Our default stellar grids make certain choices to restrict the range of assumptions. In the default stellar grids, we follow the choice in `Wilkins et al. (2020) <https://ui.adsabs.harvard.edu/abs/2020MNRAS.493.6079W/abstract>`_ and choose a reference ionisation parameter, anchored at a stellar age and metallicity of 1 Myr and 0.01, respectively (see Section 2.2.1 in `Wilkins et al. 2020 <https://ui.adsabs.harvard.edu/abs/2020MNRAS.493.6079W/abstract>`_ ). We also choose the hydrogen density of the nebula as 1000cm\ :sup:`-3` . And we assume the nebula is ionisation-bound and hence case-B recombination holds.
+The photoionisation modelling used to generate our grids currently uses the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code via `syncretize <https://github.com/synthesizer-project/syncretize>`_. It can simulate a range of ISM and ionisation conditions. Our default stellar grids make certain choices to restrict the range of assumptions. In the default stellar grids, we follow the choice in `Wilkins et al. (2020) <https://ui.adsabs.harvard.edu/abs/2020MNRAS.493.6079W/abstract>`_ and choose a reference ionisation parameter, anchored at a stellar age and metallicity of 1 Myr and 0.01, respectively (see Section 2.2.1 in `Wilkins et al. 2020 <https://ui.adsabs.harvard.edu/abs/2020MNRAS.493.6079W/abstract>`_ ). We also choose the hydrogen density of the nebula as 1000cm\ :sup:`-3` . And we assume the nebula is ionisation-bound and hence case-B recombination holds.
 
 * `reference_ionisation_parameter: 0.01`
 * `hydrogen_density: 1.0e+3`
