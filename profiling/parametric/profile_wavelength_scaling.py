@@ -102,6 +102,12 @@ def profile_wavelength_scaling(
                 ("Incident", model_incident),
                 ("Pacman", model_pacman),
             ):
+                # The grid weights are cached on each Stars, clear them
+                # so every timing includes computing them
+                for p in pops:
+                    p.clear_weights()
+                combined.clear_weights()
+
                 start = time.perf_counter()
                 for p in pops:
                     p.get_spectra(model, nthreads=nthreads)

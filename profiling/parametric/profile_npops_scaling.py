@@ -166,6 +166,12 @@ def profile_npops(
                 ("Incident", model_incident),
                 ("Pacman", model_pacman),
             ):
+                # The grid weights are cached on each Stars, clear them
+                # so every timing includes computing them
+                for p in pops:
+                    p.clear_weights()
+                combined.clear_weights()
+
                 start = time.perf_counter()
                 for p in pops:
                     p.get_spectra(model, nthreads=nthreads)
@@ -179,6 +185,7 @@ def profile_npops(
                     time.perf_counter() - start
                 )
 
+            combined.clear_weights()
             start = time.perf_counter()
             combined.get_spectra(model_per_pop, nthreads=nthreads)
             iter_times["spectra"]["Incident per population, combined"].append(
@@ -193,13 +200,15 @@ def profile_npops(
                 seds = [p.spectra["int"] for p in pops]
                 start = time.perf_counter()
                 for sed in seds:
-                    sed.get_photo_lnu(filters)
+                    sed.get_photo_lnu(filters, nthreads=nthreads)
                 iter_times["photometry"][f"Separate ({nfilt} filters)"].append(
                     time.perf_counter() - start
                 )
 
                 start = time.perf_counter()
-                combined.population_spectra["int"].get_photo_lnu(filters)
+                combined.population_spectra["int"].get_photo_lnu(
+                    filters, nthreads=nthreads
+                )
                 iter_times["photometry"][
                     f"Per population, combined ({nfilt} filters)"
                 ].append(time.perf_counter() - start)
