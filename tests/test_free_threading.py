@@ -100,6 +100,7 @@ EXTENSION_MODULES = [
     "synthesizer.extensions.timers",
     "synthesizer.imaging.extensions.circular_aperture",
     "synthesizer.imaging.extensions.image",
+    "synthesizer.imaging.extensions.parametric_image",
 ]
 
 
