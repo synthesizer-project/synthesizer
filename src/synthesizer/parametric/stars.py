@@ -2277,7 +2277,12 @@ class Stars(StarsComponent):
                 has no morphology).
         """
         morphologies = [stars.morphology for stars in populations]
-        if all(morph is morphologies[0] for morph in morphologies):
+        # A shared morphology is kept, unless it describes the populations
+        # of each Stars separately (and so must be repeated for each)
+        if all(morph is morphologies[0] for morph in morphologies) and (
+            len(populations) == 1
+            or not isinstance(morphologies[0], PopulationMorphology)
+        ):
             return morphologies[0]
         if any(morph is None for morph in morphologies):
             warn(

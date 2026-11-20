@@ -1365,3 +1365,66 @@ class TestImagingExtension:
         """An image with no pixels is empty."""
         gauss = Gaussian2D(0 * kpc, 0 * kpc, 1 * kpc, 1 * kpc)
         assert gauss.get_density_grid(RESOLUTION, (0, 0)).size == 0
+
+    def test_child_profile_is_not_imaged_as_its_parent(self):
+        """A child overriding the profile is sampled, not sent to C++."""
+
+        class Truncated(Sersic2D):
+            """A Sersic profile with nothing beyond 1 kpc."""
+
+            def compute_density_grid(self, x, y):
+                """Compute the truncated density grid.
+
+                Args:
+                    x (unyt_array): x values on a 2D grid.
+                    y (unyt_array): y values on a 2D grid.
+
+                Returns:
+                    tuple: The density grid and its normalisation.
+                """
+                grid, norm = super().compute_density_grid(x, y)
+                return np.where(self.get_radius(x, y) < 1 * kpc, grid, 0), norm
+
+        profile = Truncated(r_eff=1 * kpc, sersic_index=1)
+        grid = profile.get_density_grid(RESOLUTION, NPIX)
+
+        # Nothing beyond the truncation (allowing for the pixel size), and
+        # normalised to the light there is rather than the parent's total
+        xx, yy = profile._get_coordinate_grids(RESOLUTION, NPIX)
+        outside = profile.get_radius(xx, yy) > 1 * kpc + 2 * RESOLUTION
+        assert np.all(grid[outside] == 0)
+        np.testing.assert_allclose(grid.sum(), 1.0)
+
+    def test_nothing_in_the_field_of_view(self):
+        """A sampled profile with no light in the image gives zeros."""
+        with pytest.warns(FutureWarning):
+            annulus = Sersic2DAnnuli(
+                r_eff=1 * kpc,
+                radii=unyt_array([0.0, 1.0, 2.0, 500.0], kpc),
+                annulus=3,
+            )
+        grid = annulus.get_density_grid(RESOLUTION, NPIX)
+        assert np.all(grid == 0)
+
+    def test_signal_count_must_match_populations(self):
+        """Signals for the wrong number of populations are rejected."""
+        annuli = Annuli(
+            Gaussian2D(0 * kpc, 0 * kpc, 1 * kpc, 1 * kpc),
+            unyt_array([0.0, 1.0, np.inf], kpc),
+        )
+        with pytest.raises(exceptions.InconsistentArguments):
+            annuli.get_weighted_density_grid(RESOLUTION, NPIX, np.ones(3))
+
+    def test_incompatible_resolution_units(self):
+        """A resolution the profile can't convert to is rejected."""
+        sersic = Sersic2D(
+            r_eff=1 * kpc, cosmo=FlatLambdaCDM(H0=70, Om0=0.3), redshift=1.0
+        )
+        with pytest.raises(exceptions.InconsistentUnits):
+            sersic.get_density_grid(50 * mas, NPIX)
+        annuli = Annuli(
+            Sersic2D(r_eff=50 * mas, x_0=0 * mas, y_0=0 * mas),
+            unyt_array([0.0, 1.0, np.inf], kpc),
+        )
+        with pytest.raises(exceptions.InconsistentUnits):
+            annuli.get_weighted_density_grid(50 * mas, NPIX, np.ones(2))

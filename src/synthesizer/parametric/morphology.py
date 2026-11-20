@@ -24,6 +24,7 @@ import numpy as np
 import scipy.special
 from unyt import kpc, mas, unyt_array
 from unyt.dimensions import angle, length
+from unyt.exceptions import UnitConversionError
 
 from synthesizer import exceptions
 from synthesizer.synth_warnings import deprecation, warn
@@ -73,6 +74,12 @@ def _make_images(rows, signals, resolution, npix, nthreads=1, tolerance=None):
     signals = np.asarray(signals)
     if signals.dtype not in (np.float32, np.float64):
         signals = signals.astype(np.float64)
+    # We need a signal for each population the morphology describes
+    if len(signals) != len(rows):
+        raise exceptions.InconsistentArguments(
+            f"The morphology describes {len(rows)} populations but got "
+            f"signals for {len(signals)}."
+        )
     signals = signals.reshape(len(rows), -1)
 
     # An image with no pixels (e.g. a field of view smaller than a pixel)
@@ -90,6 +97,29 @@ def _make_images(rows, signals, resolution, npix, nthreads=1, tolerance=None):
         IMAGE_TOLERANCE if tolerance is None else tolerance,
         nthreads,
     )
+
+
+def _keeps_profile(morphology, name):
+    """Check a morphology's profile is the one its method was written for.
+
+    A child overriding compute_density_grid changes the profile itself, so
+    anything it inherits describing the parent's profile (its imaging
+    extension parameters or its total) no longer applies.
+
+    Args:
+        morphology (MorphologyBase):
+            The morphology.
+        name (str):
+            The name of the method describing the profile.
+
+    Returns:
+        bool:
+            Whether compute_density_grid comes from the class defining the
+            method.
+    """
+    cls = type(morphology)
+    owner = next(c for c in cls.__mro__ if name in vars(c))
+    return cls.compute_density_grid is owner.compute_density_grid
 
 
 def _get_image_rows(morphology, resolution):
@@ -118,6 +148,11 @@ def _get_image_rows(morphology, resolution):
         profile_rows = _get_image_rows(morphology.profile, resolution)
         if profile_rows is None or len(profile_rows) != 1:
             return None
+        if morphology.radii.units.dimensions != resolution.units.dimensions:
+            raise exceptions.InconsistentUnits(
+                f"The annulus radii ({morphology.radii.units}) are "
+                f"incompatible with the resolution ({resolution.units})."
+            )
         radii = np.minimum(
             morphology.radii.to(resolution.units).value, _UNBOUNDED
         )
@@ -128,9 +163,17 @@ def _get_image_rows(morphology, resolution):
             rows.append(row)
         return rows
     get_params = getattr(morphology, "_get_image_params", None)
-    if get_params is None:
+    if get_params is None or not _keeps_profile(
+        morphology, "_get_image_params"
+    ):
         return None
-    return [get_params(resolution)]
+    try:
+        return [get_params(resolution)]
+    except UnitConversionError as error:
+        raise exceptions.InconsistentUnits(
+            f"The {morphology.__class__.__name__} morphology can't be "
+            f"imaged at a resolution in {resolution.units}: {error}"
+        ) from error
 
 
 # The indices of the parameters in an imaging extension profile row (see
@@ -341,10 +384,17 @@ class MorphologyBase(ABC):
             density_grid = density_grid + np.asarray(grid)
         density_grid = density_grid / len(offsets)
 
-        # Normalise by the total over the plane if we know it
-        total = None if kwargs else self.get_total(resolution.units)
+        # Normalise by the total over the plane if we know it (a child
+        # changing the profile doesn't have its parent's total)
+        total = (
+            self.get_total(resolution.units)
+            if not kwargs and _keeps_profile(self, "get_total")
+            else None
+        )
         if total is None:
-            return density_grid / np.sum(density_grid)
+            # Nothing in the field of view leaves the grid empty
+            total_in_fov = np.sum(density_grid)
+            return density_grid / (total_in_fov if total_in_fov > 0 else 1.0)
         return density_grid * resolution.value**2 / total
 
     def __str__(self):
@@ -1648,18 +1698,14 @@ class Annuli(PopulationMorphology):
         weights = weights.reshape(npixels, self.npop) / len(offsets)
 
         # Normalise each annulus over its own pixels
-        return self._sum_annuli(
-            weights, np.sum(weights, axis=0), signals, npix
-        )
+        return self._sum_annuli(weights, signals, npix)
 
-    def _sum_annuli(self, weights, norm, signals, npix):
+    def _sum_annuli(self, weights, signals, npix):
         """Sum each annulus' normalised light times its signal.
 
         Args:
             weights (np.ndarray):
                 The light of each annulus in each pixel, (npixels, npop).
-            norm (np.ndarray):
-                The total light of each annulus.
             signals (np.ndarray):
                 The signal of each annulus, with shape (npop, ...).
             npix (tuple, int):
@@ -1669,7 +1715,8 @@ class Annuli(PopulationMorphology):
             np.ndarray:
                 The weighted density grid with shape (npix[1], npix[0], ...).
         """
-        covered = np.sum(weights, axis=0) > 0
+        norm = np.sum(weights, axis=0)
+        covered = norm > 0
         if np.any(
             ~covered & np.any(signals != 0, axis=tuple(range(1, signals.ndim)))
         ):

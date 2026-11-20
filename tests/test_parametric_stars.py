@@ -2101,6 +2101,25 @@ class TestPopulationAccessAndImaging:
             ),
         ]
 
+    def test_shared_population_morphology_is_repeated(self, test_grid):
+        """Stars sharing one Annuli combine to an Annuli for each."""
+        annuli = Annuli(
+            Sersic2D(r_eff=1 * kpc), np.array([0.0, 1.0, np.inf]) * kpc
+        )
+        pair = Stars.from_populations(
+            [
+                self._population(test_grid, SFH.Constant(max_age=age), 0.2)
+                for age in (1e8 * yr, 1e9 * yr)
+            ]
+        )
+        pair.morphology = annuli
+
+        # Combining the pair with itself needs the two annuli twice over
+        combined = pair + pair
+        assert combined.npop == 4
+        assert isinstance(combined.morphology, PerPopulation)
+        assert combined.morphology.npop == 4
+
     def test_named_access(self, test_grid):
         """Populations can be looked up by name with their own parameters."""
         stars = Stars.from_populations(
