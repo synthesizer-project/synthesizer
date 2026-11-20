@@ -24,6 +24,7 @@ from synthesizer.instruments import (
     PhotometricInstrument,
     SpectroscopicInstrument,
     get_lams_from_resolving_power,
+    get_lsfs_from_resolving_power,
 )
 from synthesizer.instruments.premade import GALEXFUV, GALEXNUV, JWSTNIRSpec
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
@@ -89,6 +90,11 @@ class DummySpectroscopicInstrument:
     def can_do_noisy_spectroscopy(self):
         """Return whether this dummy instrument should add noise."""
         return self.noisy
+
+    @property
+    def can_do_lsf_spectroscopy(self):
+        """Return whether this dummy instrument should apply an LSF."""
+        return False
 
     def apply_lam_array_lnu(self, sed):
         """Record the delegated rest frame wavelength-application call."""
@@ -826,6 +832,8 @@ def test_component_plot_spectroscopy_uses_matching_frame(quantity, frame_lam):
         redshift=1.0,
         spectroscopy_lnu={},
         spectroscopy_fnu={},
+        spectroscopy_lsf_lnu={},
+        spectroscopy_lsf_fnu={},
     )
     getattr(component, f"spectroscopy_{quantity}")["spec"] = {"toy": sed}
 
@@ -1946,3 +1954,419 @@ def test_lams_from_varying_resolving_power():
     np.testing.assert_allclose(np.diff(lams.value), 10.0)
     assert len(lams) == 101
     np.testing.assert_allclose(lams[-1].value, 2000.0)
+
+
+def _observed_line_sed(z, line_lam=5500.0, nspec=None):
+    """Build an Sed with a flat continuum and one narrow line observed at z.
+
+    Args:
+        z (float):
+            The redshift to observe the Sed at.
+        line_lam (float):
+            The rest frame wavelength of the line in angstrom.
+        nspec (int, optional):
+            If given the Sed holds this many copies of the spectrum, as
+            particle spectra do.
+
+    Returns:
+        Sed:
+            The Sed with its fluxes computed at z.
+    """
+    # Build the continuum and line, and compute the fluxes at z
+    lam = np.arange(1000.0, 20001.0, 1.0) * angstrom
+    lnu = np.full(lam.size, 1e28)
+    lnu[np.argmin(np.abs(lam.value - line_lam))] += 1e31
+    if nspec is not None:
+        lnu = np.tile(lnu, (nspec, 1))
+    sed = Sed(lam, lnu * erg / s / Hz)
+    sed.get_fnu(Planck18, z)
+    return sed
+
+
+def _lsf_instrument(kernel, lsf_resample_factor=1):
+    """Build an instrument covering 10000-12000 A with one LSF kernel.
+
+    Args:
+        kernel (np.ndarray):
+            The LSF kernel to use at every wavelength (None for no LSFs).
+        lsf_resample_factor (int):
+            The LSF supersampling factor.
+
+    Returns:
+        SpectroscopicInstrument:
+            The instrument, with a wavelength element every 10 A.
+    """
+    lam = np.arange(10000.0, 12001.0, 10.0) * angstrom
+    return SpectroscopicInstrument(
+        label="spec",
+        lam=lam,
+        lsfs=kernel,
+        lsf_resample_factor=lsf_resample_factor,
+    )
+
+
+def test_apply_lsf_uses_each_elements_own_kernel():
+    """Each wavelength element should collect light with its own kernel."""
+    sed = _observed_line_sed(1.0)
+
+    # Every wavelength element keeps its own light, apart from the element
+    # after the one holding the line, whose kernel collects the light of the
+    # element before it
+    lam = np.arange(10000.0, 12001.0, 10.0) * angstrom
+    lsfs = np.tile([0.0, 1.0, 0.0], (lam.size, 1))
+    lsfs[101] = [0.0, 0.0, 1.0]
+    instrument = SpectroscopicInstrument(label="spec", lam=lam, lsfs=lsfs)
+
+    spec = instrument.apply_lsf(sed, "observer")
+
+    # The line is therefore seen in its own element and in the next one
+    # (whose flux density is slightly higher, as it is narrower in frequency)
+    line = (spec.fnu - spec.fnu[0]).value
+    assert line[100] > 0
+    np.testing.assert_allclose(line[101], line[100], rtol=1e-2)
+    np.testing.assert_allclose(
+        np.delete(line, [100, 101]), 0, atol=1e-6 * line[100]
+    )
+
+
+@pytest.mark.parametrize("lsf_resample_factor", [1, 4])
+def test_apply_lsf_keeps_a_flat_spectrum_flat(lsf_resample_factor):
+    """A flat spectrum should stay flat, including at the ends."""
+    # A flat spectrum that extends beyond the instrument wavelengths
+    lam = np.arange(1000.0, 20001.0, 1.0) * angstrom
+    sed = Sed(lam, np.full(lam.size, 1e28) * erg / s / Hz)
+    sed.get_fnu(Planck18, 1.0)
+
+    # Unevenly spaced instrument wavelengths and a wide kernel, so the
+    # elements at the ends need the light from beyond them
+    lam = np.geomspace(10000.0, 12000.0, 201) * angstrom
+    kernel = np.exp(-0.5 * (np.arange(-8, 9) / 3.0) ** 2)
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=lam,
+        lsfs=np.tile(kernel / kernel.sum(), (lam.size, 1)),
+        lsf_resample_factor=lsf_resample_factor,
+    )
+
+    spec = instrument.apply_lsf(sed, "observer")
+
+    # It stays flat to 0.2% (past the ends, the spacing of the wavelengths
+    # is taken to carry on as it is at the ends)
+    np.testing.assert_allclose(
+        spec.fnu, instrument.apply_lam_array_fnu(sed).fnu, rtol=2e-3
+    )
+
+
+def test_apply_lsf_with_wavelengths_shared_with_the_spectrum():
+    """A flat spectrum should stay flat on a subset of its own wavelengths."""
+    # Cut the instrument wavelengths out of the spectrum's own, so that
+    # the edges of the two sets of wavelength bins coincide
+    lam = np.arange(1000.0, 9000.0, 0.1) * angstrom
+    sed = Sed(lam, np.ones(lam.size) * erg / s / Hz)
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=lam[45725:45837],
+        lsfs=np.tile([0.25, 0.5, 0.25], (112, 1)),
+    )
+
+    spec = instrument.apply_lsf(sed, "rest")
+
+    np.testing.assert_allclose(spec.lnu.value, 1.0)
+
+
+def test_lsf_resample_factor_keeps_a_lines_position():
+    """Finer LSF bins should keep a line's position within an element."""
+    # A line observed at 11002 A, a fifth of a wavelength element from the
+    # middle of the element at 11000 A
+    sed = _observed_line_sed(1.0, line_lam=5501.0)
+
+    centres = {}
+    for factor in (1, 5):
+        # A Gaussian LSF with a sigma of one wavelength element
+        offsets = np.arange(-4 * factor, 4 * factor + 1) / factor
+        kernel = np.exp(-0.5 * offsets**2)
+        instrument = _lsf_instrument(kernel / kernel.sum(), factor)
+        spec = instrument.apply_lsf(sed, "observer")
+
+        # Find the centre of the line
+        line = (spec.fnu - spec.fnu[0]).value
+        centres[factor] = np.sum(line * instrument.lam.value) / np.sum(line)
+
+    # Without finer bins the line is seen at the middle of its element,
+    # with bins a fifth of an element wide it stays where it is
+    np.testing.assert_allclose(centres[1], 11000.0, atol=0.1)
+    np.testing.assert_allclose(centres[5], 11002.0, atol=0.1)
+
+
+@pytest.mark.parametrize(
+    "frame,quantity,scale,frame_lam",
+    [
+        ("rest", "lnu", 0.5, "lam"),
+        ("observer", "fnu", 1.0, "obslam"),
+        ("observed", "fnu", 1.0, "obslam"),
+    ],
+)
+def test_apply_lsf_uses_matching_frame(frame, quantity, scale, frame_lam):
+    """apply_lsf should apply the LSF in the frame it is given."""
+    # Put the instrument wavelengths around the line in the requested frame
+    # (the line is at 5500 A in the rest frame and 11000 A observed at z=1,
+    # in the middle of the instrument's 101st wavelength element)
+    sed = _observed_line_sed(1.0)
+    kernel = np.array([0.2, 0.5, 0.3])
+    lam = scale * np.arange(10000.0, 12001.0, 10.0) * angstrom
+    instrument = SpectroscopicInstrument(
+        label="spec", lam=lam, lsfs=np.tile(kernel, (lam.size, 1))
+    )
+
+    spec = instrument.apply_lsf(sed, frame)
+    plain = getattr(instrument, f"apply_lam_array_{quantity}")(sed)
+
+    # The result is on the instrument wavelengths in that frame, with the
+    # other frame's wavelengths following from the redshift
+    np.testing.assert_allclose(getattr(spec, frame_lam), instrument.lam)
+    np.testing.assert_allclose(spec.obslam, spec.lam * 2.0)
+
+    # The line (above the flat continuum) has the shape of the kernel, in
+    # the same order, in both the luminosities and the fluxes
+    for arr in (spec.lnu, spec.fnu):
+        line = (arr - arr[0]).value[99:102]
+        np.testing.assert_allclose(line / line.sum(), kernel, atol=1e-3)
+
+    # The light in the line is unchanged
+    line = (getattr(spec, quantity) - getattr(spec, quantity)[0]).value
+    plain_line = (getattr(plain, quantity) - getattr(plain, quantity)[0]).value
+    np.testing.assert_allclose(line.sum(), plain_line[100], rtol=1e-3)
+
+
+def test_apply_lsf_reuses_its_matrix_for_the_same_wavelengths():
+    """The matrix applying the LSF is reused for the same wavelengths only."""
+    instrument = _lsf_instrument(np.array([0.25, 0.5, 0.25]))
+    sed = _observed_line_sed(1.0)
+
+    # Spectra on the same wavelengths share one matrix
+    matrix = instrument._get_lsf_matrix(sed._obslam)
+    assert instrument._get_lsf_matrix(sed._obslam.copy()) is matrix
+
+    # Spectra on other wavelengths get their own, and so the same
+    # spectroscopy as from an instrument that has been used for nothing else
+    other = _observed_line_sed(1.01)
+    unused = _lsf_instrument(np.array([0.25, 0.5, 0.25]))
+    np.testing.assert_array_equal(
+        instrument.apply_lsf(other, "observer").fnu,
+        unused.apply_lsf(other, "observer").fnu,
+    )
+
+    # No more than eight matrices are kept
+    for z in np.arange(1.02, 1.11, 0.01):
+        instrument._get_lsf_matrix(_observed_line_sed(z)._obslam)
+    assert len(instrument._lsf_matrices) == 8
+
+
+def test_apply_lsf_errors():
+    """apply_lsf should raise without LSFs, a known frame or fluxes."""
+    sed = _observed_line_sed(1.0)
+    instrument = _lsf_instrument(np.array([0.25, 0.5, 0.25]))
+
+    # An instrument without LSFs has nothing to apply
+    with pytest.raises(exceptions.MissingArgument):
+        _lsf_instrument(None).apply_lsf(sed, "observer")
+
+    # The frame of the instrument wavelengths must be "rest" or "observer"
+    with pytest.raises(exceptions.InconsistentArguments):
+        instrument.apply_lsf(sed, "fnu")
+
+    # The observer frame needs fluxes
+    with pytest.raises(exceptions.MissingSpectraType):
+        instrument.apply_lsf(Sed(sed.lam, sed.lnu), "observer")
+
+
+@pytest.mark.parametrize("lsf_resample_factor", [0, 2.5])
+def test_lsf_resample_factor_must_be_positive_integer(lsf_resample_factor):
+    """LSF resample factors that are not positive integers are refused."""
+    with pytest.raises(exceptions.InconsistentArguments):
+        _lsf_instrument(None, lsf_resample_factor)
+
+
+def test_lsf_resample_factor_roundtrips(tmp_path):
+    """The LSF resample factor should be saved and restored."""
+    instrument = _lsf_instrument(np.array([0.25, 0.5, 0.25]), 4)
+    path = tmp_path / "spec.hdf5"
+
+    with h5py.File(path, "w") as hdf:
+        instrument.to_hdf5(hdf)
+
+    loaded = SpectroscopicInstrument.load(path)
+    assert loaded.lsf_resample_factor == 4
+    assert loaded == instrument
+
+    # The factor is part of what makes two instruments equal
+    assert loaded != _lsf_instrument(np.array([0.25, 0.5, 0.25]), 1)
+
+    # Files written before the factor existed load with a factor of 1
+    with h5py.File(path, "a") as hdf:
+        del hdf["LSFResampleFactor"]
+    assert SpectroscopicInstrument.load(path).lsf_resample_factor == 1
+
+
+@pytest.mark.parametrize("quantity", ["lnu", "fnu"])
+def test_galaxy_spectroscopy_applies_lsf(quantity):
+    """Galaxy spectroscopy should be stored with and without the LSF."""
+    sed = _observed_line_sed(1.0)
+    galaxy = ParticleGalaxy(redshift=1.0)
+    galaxy.spectra["toy"] = sed
+    instrument = _lsf_instrument(np.array([0.25, 0.5, 0.25]))
+    get_spectroscopy = getattr(galaxy, f"get_spectroscopy_{quantity}")
+    frame = "rest" if quantity == "lnu" else "observer"
+
+    spec = get_spectroscopy(instrument)["toy"]
+
+    # The spectroscopy with the LSF is returned and stored in its own
+    # dictionary, next to the spectroscopy without the LSF
+    spectroscopy = getattr(galaxy, f"spectroscopy_{quantity}")
+    spectroscopy_lsf = getattr(galaxy, f"spectroscopy_lsf_{quantity}")
+    assert spectroscopy_lsf["spec"]["toy"] is spec
+    np.testing.assert_allclose(
+        getattr(spec, quantity),
+        getattr(instrument.apply_lsf(sed, frame), quantity),
+    )
+    apply_lam_array = getattr(instrument, f"apply_lam_array_{quantity}")
+    np.testing.assert_allclose(
+        getattr(spectroscopy["spec"]["toy"], quantity),
+        getattr(apply_lam_array(sed), quantity),
+    )
+
+    # Once the instrument has no LSF, the spectroscopy stored with it is
+    # discarded
+    instrument.set_lsfs(None)
+    get_spectroscopy(instrument)
+    assert "spec" not in spectroscopy_lsf
+
+
+def test_component_spectroscopy_applies_lsf_to_particle_spectra():
+    """Component spectroscopy should apply the LSF to particle spectra too."""
+    # A component with an integrated spectrum and three single precision
+    # particle spectra, each the same as the integrated one
+    particle_sed = _observed_line_sed(1.0, nspec=3)
+    particle_sed.cast(np.float32)
+    component = SimpleNamespace(
+        redshift=1.0,
+        spectra={"toy": _observed_line_sed(1.0)},
+        particle_spectra={"toy": particle_sed},
+        spectroscopy_fnu={},
+        spectroscopy_lsf_fnu={},
+        particle_spectroscopy_fnu={},
+        particle_spectroscopy_lsf_fnu={},
+    )
+    instrument = _lsf_instrument(np.array([0.25, 0.5, 0.25]))
+
+    returned = Component._get_spectroscopy(component, instrument, "fnu")
+
+    # The spectroscopy with the LSF is returned, and each particle's
+    # matches it, in the precision of the particle spectra
+    spec = component.spectroscopy_lsf_fnu["spec"]["toy"]
+    particle_spec = component.particle_spectroscopy_lsf_fnu["spec"]["toy"]
+    assert returned["toy"] is spec
+    assert particle_spec.fnu.shape == (3, instrument.lam.size)
+    assert particle_spec.fnu.dtype == np.float32
+    np.testing.assert_allclose(particle_spec.fnu[0], spec.fnu, rtol=1e-5)
+
+    # The particle spectroscopy without the LSF is kept as well
+    plain = component.particle_spectroscopy_fnu["spec"]["toy"]
+    assert not np.allclose(plain.fnu, particle_spec.fnu)
+
+    # Once the instrument has no LSF, the spectroscopy stored with it is
+    # discarded
+    instrument.set_lsfs(None)
+    Component._get_spectroscopy(component, instrument, "fnu")
+    assert "spec" not in component.spectroscopy_lsf_fnu
+    assert "spec" not in component.particle_spectroscopy_lsf_fnu
+
+
+@pytest.mark.parametrize(
+    "resolving_power,resolving_power_lam",
+    [
+        (500.0, None),
+        (lambda lam: 500.0, None),
+        (np.array([500.0, 500.0]), np.array([9000.0, 11000.0]) * angstrom),
+    ],
+)
+def test_lsfs_from_resolving_power(resolving_power, resolving_power_lam):
+    """A resolving power should give Gaussian kernels of the right width."""
+    lam = np.arange(9950.0, 10051.0, 10.0) * angstrom
+    lsfs = get_lsfs_from_resolving_power(
+        lam,
+        resolving_power,
+        lsf_resample_factor=4,
+        resolving_power_lam=resolving_power_lam,
+    )
+
+    # Each wavelength has a normalised kernel with an odd number of bins
+    assert lsfs.shape[0] == lam.size
+    assert lsfs.shape[1] % 2 == 1
+    np.testing.assert_allclose(lsfs.sum(axis=1), 1.0)
+
+    # R = 500 at 10000 A is a full width at half maximum of 20 A, which is
+    # two 10 A wavelength elements, so 8 bins with 4 bins to an element
+    offsets = np.arange(lsfs.shape[1]) - lsfs.shape[1] // 2
+    sigma = np.sqrt(np.sum(lsfs[5] * offsets**2))
+    np.testing.assert_allclose(
+        sigma, 8 / (2 * np.sqrt(2 * np.log(2))), rtol=1e-2
+    )
+
+
+def test_resolving_power_table_must_cover_wavelengths():
+    """A tabulated resolving power should cover the wavelengths."""
+    lam = np.arange(10000.0, 12001.0, 10.0) * angstrom
+    resolving_power = np.array([500.0, 1000.0])
+
+    # A table that stops within a wavelength element of each end is fine
+    get_lsfs_from_resolving_power(
+        lam,
+        resolving_power,
+        resolving_power_lam=np.array([10005.0, 11995.0]) * angstrom,
+    )
+
+    # One that stops further short is refused
+    with pytest.raises(exceptions.InconsistentArguments):
+        get_lsfs_from_resolving_power(
+            lam,
+            resolving_power,
+            resolving_power_lam=np.array([10500.0, 12000.0]) * angstrom,
+        )
+
+
+def test_set_lsfs_on_an_existing_instrument():
+    """LSFs set on an existing instrument should be applied."""
+    lam = np.arange(10000.0, 12001.0, 10.0) * angstrom
+    sed = _observed_line_sed(1.0)
+
+    # A resolving power alone does not give an instrument an LSF
+    instrument = SpectroscopicInstrument(
+        label="spec", lam=lam, resolving_power=500.0
+    )
+    assert not instrument.can_do_lsf_spectroscopy
+
+    # Setting the LSFs made from it gives the same spectrum as passing
+    # them when the instrument is created
+    lsfs = get_lsfs_from_resolving_power(lam, 500.0, lsf_resample_factor=4)
+    instrument.set_lsfs(lsfs, lsf_resample_factor=4)
+    expected = SpectroscopicInstrument(
+        label="spec", lam=lam, lsfs=lsfs, lsf_resample_factor=4
+    )
+    assert instrument.lsf_resample_factor == 4
+    np.testing.assert_array_equal(
+        instrument.apply_lsf(sed, "observer").fnu,
+        expected.apply_lsf(sed, "observer").fnu,
+    )
+
+    # Setting other LSFs replaces them
+    kernel = np.array([0.25, 0.5, 0.25])
+    instrument.set_lsfs(kernel, lsf_resample_factor=1)
+    np.testing.assert_array_equal(
+        instrument.apply_lsf(sed, "observer").fnu,
+        _lsf_instrument(kernel).apply_lsf(sed, "observer").fnu,
+    )
+
+    # And None removes them
+    instrument.set_lsfs(None)
+    assert not instrument.can_do_lsf_spectroscopy
