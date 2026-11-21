@@ -91,6 +91,7 @@ EXTENSION_MODULES = [
     "synthesizer.extensions.kernel",
     "synthesizer.extensions.observed_spectra",
     "synthesizer.extensions.openmp_check",
+    "synthesizer.extensions.parametric_spectra",
     "synthesizer.extensions.particle_spectra",
     "synthesizer.extensions.photometry",
     "synthesizer.extensions.reductions",
@@ -99,6 +100,7 @@ EXTENSION_MODULES = [
     "synthesizer.extensions.timers",
     "synthesizer.imaging.extensions.circular_aperture",
     "synthesizer.imaging.extensions.image",
+    "synthesizer.imaging.extensions.parametric_image",
 ]
 
 
