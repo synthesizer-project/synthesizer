@@ -13,7 +13,13 @@ from unyt import angstrom, arcsecond, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging import SpectralCube
-from synthesizer.imaging.image_generators import _standardize_imaging_units
+from synthesizer.imaging.data_cube_generators import (
+    _generate_ifu_parametric_smoothed,
+)
+from synthesizer.imaging.image_generators import (
+    _has_population_morphology,
+    _standardize_imaging_units,
+)
 from synthesizer.instruments.instrument_base import _hashable_state
 from synthesizer.instruments.spectroscopic_instrument import (
     SpectroscopicInstrument,
@@ -384,6 +390,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                 fov=fov,
                 lam=self.lam,
                 quantity=quantity,
+                nthreads=nthreads,
             )
 
         return self._generate_particle_component_cube(
@@ -479,6 +486,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         fov,
         lam,
         quantity="lnu",
+        nthreads=1,
     ):
         """Generate a data cube for one parametric component.
 
@@ -489,13 +497,27 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             fov (unyt_quantity): Width of the requested data cube.
             lam (unyt_array): Wavelength array defining the cube sampling.
             quantity (str): Spectral quantity to store in the cube.
+            nthreads (int): Number of threads to use.
 
         Returns:
             SpectralCube: Generated spectral data cube for the component.
         """
         cube = SpectralCube(resolution=self.resolution, fov=fov, lam=lam)
+
+        # Populations with their own morphologies are combined population by
+        # population
+        if _has_population_morphology(component):
+            return _generate_ifu_parametric_smoothed(
+                cube,
+                sed=sed,
+                quantity=quantity,
+                density_grid=None,
+                morphology=component.morphology,
+                nthreads=nthreads,
+            )
+
         density_grid = component.morphology.get_density_grid(
-            self.resolution, cube.npix
+            self.resolution, cube.npix, nthreads=nthreads
         )
         cube.generate_data_cube_smoothed(
             sed=sed,

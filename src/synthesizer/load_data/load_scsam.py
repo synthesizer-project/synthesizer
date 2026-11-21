@@ -21,11 +21,7 @@ import numpy as np
 from unyt import Msun, yr
 
 from synthesizer import exceptions
-from synthesizer.load_data.utils import (
-    bin_overlap_matrix,
-    cic_matrix,
-    split_age_bins,
-)
+from synthesizer.load_data.utils import split_age_bins
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
@@ -48,9 +44,9 @@ def load_SCSAM(fname, method, grid, verbose=False, dtype=np.float64):
             'particle' returns particle galaxies with one particle per
             non-zero cell, split at every grid age the cell's age bin
             contains so young star formation is resolved. 'parametric'
-            integrates each cell over the grid age cells (the
-            ``parametric.Stars`` convention) and returns parametric
-            galaxies. 'parametric_NNI' and 'parametric_RGI' are
+            returns parametric galaxies holding the cells exactly (via
+            ``parametric.Stars.from_binned``, each tabulated metallicity
+            a single value). 'parametric_NNI' and 'parametric_RGI' are
             deprecated aliases for 'parametric'.
         grid (Grid):
             Grid whose age and metallicity axes define the SFZH, and
@@ -108,8 +104,10 @@ def load_SCSAM(fname, method, grid, verbose=False, dtype=np.float64):
         # grid interval; narrower bins stay one particle at their midpoint
         b, age, frac = split_age_bins(lo, hi, grid_ages)
     else:
-        overlap = bin_overlap_matrix(lo, hi, grid_ages)
-        zw = cic_matrix(np.log10(zs), np.log10(grid.metallicities))
+        # Each tabulated metallicity is a single value (a zero width bin)
+        zorder = np.argsort(zs)
+        metal_edges = np.repeat(zs[zorder], 2)
+        age_edges = np.append(lo, hi[-1])
 
     galaxies, halo_inds, birthhalo_ids = [], [], []
     block = nage + 1
@@ -145,10 +143,14 @@ def load_SCSAM(fname, method, grid, verbose=False, dtype=np.float64):
             galaxy = ParticleGalaxy(stars=stars, redshift=redshift)
         else:
             if sfh.any():
-                stars = ParametricStars(
+                masses = np.zeros((nage, 2 * nz - 1))
+                masses[:, ::2] = sfh[:, zorder]
+                stars = ParametricStars.from_binned(
                     grid.log10ages,
                     grid.metallicities,
-                    sfzh=overlap.T @ sfh @ zw,
+                    age_edges,
+                    metal_edges,
+                    masses,
                 )
             galaxy = ParametricGalaxy(stars=stars, redshift=redshift)
 
