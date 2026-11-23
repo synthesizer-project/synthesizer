@@ -44,6 +44,9 @@ from synthesizer.utils.stats import weighted_mean, weighted_median
 # each bin, so the error from this converges at second order: with 8 the
 # spectra are within 0.2% of the converged result for a narrow (sigma = 4 Myr)
 # young Gaussian SFH, and within 0.04% for typical SFHs.
+# TODO: Replace this fixed count with adaptive refinement, subdividing each
+# interval until its bin masses converge, so smooth SFHs use fewer bins and
+# sharp ones are resolved to a set tolerance.
 SFZH_SUBDIVISIONS = 8
 
 # The bound used for an open end of a mask's range. The extensions are
