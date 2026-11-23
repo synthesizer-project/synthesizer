@@ -1397,19 +1397,34 @@ class TestIntegratedFieldUnitPsfApplication:
         np.testing.assert_allclose(restored.psf_lam, instrument.lam)
 
 
-def test_integrated_field_unit_noise_placeholders_raise():
-    """IFU noise post-processing placeholders should fail explicitly."""
+def test_integrated_field_unit_noise_needs_a_noise_model(
+    spectral_cube_with_central_source,
+):
+    """IFU noise should fail explicitly without a noise model to apply."""
+    cube = spectral_cube_with_central_source
+
+    # Without a depth and SNR or noise maps there is no noise to apply
     instrument = IntegratedFieldUnit(
         label="ifu",
-        lam=np.linspace(1000, 3000, 32) * angstrom,
+        lam=cube.lam,
         resolution=1 * arcsecond,
     )
+    with pytest.raises(exceptions.MissingArgument):
+        instrument.apply_noise_to_cube(cube)
 
-    with pytest.raises(exceptions.UnimplementedFunctionality):
-        instrument.apply_noise_to_cube(object())
-
-    with pytest.raises(exceptions.UnimplementedFunctionality):
+    # Only spectral cubes can be given IFU noise
+    with pytest.raises(exceptions.InconsistentArguments):
         instrument.apply_noise(object())
+
+    # Correlated noise from noise source maps is not implemented yet
+    instrument = IntegratedFieldUnit(
+        label="ifu",
+        lam=cube.lam,
+        resolution=1 * arcsecond,
+        noise_source_maps={"filter_a": np.ones((9, 9))},
+    )
+    with pytest.raises(exceptions.UnimplementedFunctionality):
+        instrument.apply_noise_to_cube(cube)
 
 
 def test_component_style_cube_routing_can_delegate_to_ifu():
@@ -1892,8 +1907,8 @@ def test_spectroscopic_scalar_noise_roundtrip(tmp_path):
         label="spec-scalar-noise",
         lam=np.linspace(1000, 3000, 32) * angstrom,
         depth=100 * nJy,
-        depth_app_radius=0.1 * kpc,
         snrs=5.0,
+        depth_lam=2000 * angstrom,
     )
     path = tmp_path / "spec-scalar-noise.hdf5"
 
@@ -1905,9 +1920,266 @@ def test_spectroscopic_scalar_noise_roundtrip(tmp_path):
 
     assert isinstance(loaded.depth, unyt_quantity)
     assert loaded.depth == 100 * nJy
-    assert loaded.depth_app_radius == 0.1 * kpc
     assert isinstance(loaded.snrs, float)
     assert loaded.snrs == 5.0
+    assert loaded.depth_lam == 2000 * angstrom
+
+
+def test_ifu_noise_settings_roundtrip(tmp_path):
+    """The IFU aperture depth and noise template should be restored."""
+    instrument = IntegratedFieldUnit(
+        label="ifu-noise",
+        lam=np.linspace(1000, 3000, 32) * angstrom,
+        resolution=1 * arcsecond,
+        depth=100 * nJy,
+        snrs=5.0,
+        depth_app_radius=0.1 * kpc,
+        depth_window=np.array([1500.0, 2500.0]) * angstrom,
+        noise_shape_lam=np.linspace(1000, 3000, 8) * angstrom,
+        noise_shape_std=np.ones(8) * nJy,
+        template_on_detector=False,
+    )
+    path = tmp_path / "ifu-noise.hdf5"
+
+    with h5py.File(path, "w") as hdf:
+        instrument.to_hdf5(hdf.create_group("Instrument"))
+
+    with h5py.File(path, "r") as hdf:
+        loaded = Instrument._from_hdf5(hdf["Instrument"])
+
+    assert loaded.depth_app_radius == 0.1 * kpc
+    np.testing.assert_allclose(loaded.depth_window, instrument.depth_window)
+    np.testing.assert_allclose(loaded.noise_shape_std, np.ones(8) * nJy)
+    assert not loaded.template_on_detector
+    assert loaded == instrument
+
+
+@pytest.mark.parametrize(
+    "kwargs,error",
+    [
+        # A spectrum has no labels to key depths by
+        (
+            {"depth": {"a": 100 * nJy}, "snrs": 5.0},
+            exceptions.InconsistentArguments,
+        ),
+        # The noise is added in physical units
+        ({"depth": 100.0, "snrs": 5.0}, exceptions.InconsistentArguments),
+        # A noise template needs a wavelength or window to scale it at
+        (
+            {
+                "depth": 100 * nJy,
+                "snrs": 5.0,
+                "noise_shape_lam": np.linspace(1000, 3000, 8) * angstrom,
+                "noise_shape_std": np.ones(8) * nJy,
+            },
+            exceptions.MissingArgument,
+        ),
+        # But not both
+        (
+            {
+                "depth": 100 * nJy,
+                "snrs": 5.0,
+                "depth_lam": 2000 * angstrom,
+                "depth_window": np.array([1500.0, 2500.0]) * angstrom,
+            },
+            exceptions.InconsistentArguments,
+        ),
+        # And neither without a depth
+        ({"depth_lam": 2000 * angstrom}, exceptions.MissingArgument),
+    ],
+)
+def test_spectroscopic_noise_settings_are_validated(kwargs, error):
+    """Inconsistent noise settings are refused on initialisation."""
+    with pytest.raises(error):
+        SpectroscopicInstrument(
+            label="invalid-noise",
+            lam=np.linspace(1000, 3000, 32) * angstrom,
+            **kwargs,
+        )
+
+
+def _observed_flat_spectrum(instrument):
+    """Build a flat spectrum observed at z=1 on an instrument's wavelengths.
+
+    Args:
+        instrument (SpectroscopicInstrument):
+            The instrument whose (observer frame) wavelengths to use.
+
+    Returns:
+        Sed:
+            The flat spectrum, with its luminosities and fluxes.
+    """
+    lam = np.arange(1000.0, 20001.0, 10.0) * angstrom
+    sed = Sed(lam, np.full(lam.size, 1e28) * erg / s / Hz)
+    sed.get_fnu(Planck18, 1.0)
+    return instrument.apply_lam_array_fnu(sed)
+
+
+@pytest.mark.parametrize(
+    "depth,quantity",
+    [(100 * nJy, "fnu"), (1e27 * erg / s / Hz, "lnu")],
+)
+def test_apply_noise_uses_the_quantity_of_the_depth(depth, quantity):
+    """Flat noise of depth / snrs should go on the spectrum the depth is in."""
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.arange(9000.0, 13001.0, 10.0) * angstrom,
+        depth=depth,
+        snrs=5.0,
+    )
+    spec = _observed_flat_spectrum(instrument)
+
+    noisy = instrument.apply_noise(spec, rng_seed=42)
+
+    # The noise is added to the spectrum the depth is in, and the other
+    # spectrum is carried over without noise
+    other = "lnu" if quantity == "fnu" else "fnu"
+    np.testing.assert_allclose(
+        getattr(noisy, quantity) - getattr(spec, quantity), noisy.noise_arr
+    )
+    np.testing.assert_array_equal(getattr(noisy, other), getattr(spec, other))
+
+    # Every element has a 1-sigma noise of depth / snrs
+    sigma = (depth / 5.0).to(getattr(spec, quantity).units).value
+    np.testing.assert_allclose(noisy.weight_map, 1 / sigma**2)
+    np.testing.assert_allclose(np.std(noisy.noise_arr.value), sigma, rtol=0.15)
+
+
+def test_apply_noise_scales_a_noise_template_to_the_depth():
+    """A template's shape should be kept, and scaled to depth / snrs."""
+    # A template rising linearly with wavelength, on its own wavelengths
+    template_lam = np.linspace(8000.0, 14000.0, 7) * angstrom
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.arange(9000.0, 13001.0, 10.0) * angstrom,
+        depth=100 * nJy,
+        snrs=5.0,
+        depth_lam=11000 * angstrom,
+        noise_shape_lam=template_lam,
+        noise_shape_std=template_lam.value * nJy,
+        template_on_detector=False,
+    )
+    spec = _observed_flat_spectrum(instrument)
+
+    noisy = instrument.apply_noise(spec, rng_seed=42)
+
+    # The noise is 20 nJy at 11000 A and rises in proportion to wavelength
+    sigma = (20 * nJy).to(spec.fnu.units).value
+    np.testing.assert_allclose(
+        1 / np.sqrt(noisy.weight_map),
+        sigma * instrument.lam.value / 11000.0,
+    )
+
+
+def test_apply_noise_adds_noise_maps_as_they_are():
+    """Fixed noise maps should be added to the spectrum unchanged."""
+    lam = np.arange(9000.0, 13001.0, 10.0) * angstrom
+    noise_maps = np.linspace(-1.0, 1.0, lam.size) * nJy
+    instrument = SpectroscopicInstrument(
+        label="spec", lam=lam, noise_maps=noise_maps
+    )
+    spec = _observed_flat_spectrum(instrument)
+
+    noisy = instrument.apply_noise(spec)
+
+    np.testing.assert_allclose(noisy.noise_arr.to_value(nJy), noise_maps.value)
+    np.testing.assert_allclose(
+        (noisy.fnu - spec.fnu).to_value(nJy), noise_maps.value, atol=1e-8
+    )
+
+    # Noise maps that don't match the wavelengths are refused
+    instrument = SpectroscopicInstrument(
+        label="spec", lam=lam, noise_maps=noise_maps[:-1]
+    )
+    with pytest.raises(exceptions.InconsistentArguments):
+        instrument.apply_noise(spec)
+
+
+def test_simspin_noise_has_the_requested_snr():
+    """SimSpin noise needs no depth and gives one spectrum S/N = snr."""
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.arange(9000.0, 13001.0, 10.0) * angstrom,
+    )
+    spec = _observed_flat_spectrum(instrument)
+
+    noisy = instrument.apply_noise(spec, rng_seed=42, simspin_snr=10.0)
+
+    # A single spectrum is its own median, so sigma = |F| / snr
+    np.testing.assert_allclose(
+        1 / np.sqrt(noisy.weight_map), spec.fnu.value / 10.0
+    )
+
+    # The S/N must be positive
+    with pytest.raises(exceptions.InconsistentArguments):
+        instrument.apply_noise(spec, simspin_snr=0.0)
+
+
+@pytest.mark.parametrize("template_on_detector", [True, False])
+def test_ifu_noise_correlates_elements_sharing_detector_pixels(
+    template_on_detector,
+):
+    """Noise drawn on the detector should correlate neighbouring elements."""
+    # A cube sampling each 40 A detector pixel 4 times
+    lam = np.arange(1000.0, 3001.0, 10.0) * angstrom
+    cube = SpectralCube(resolution=1 * arcsecond, fov=20 * arcsecond, lam=lam)
+    cube.arr = np.zeros((20, 20, lam.size))
+    cube.units = nJy
+    cube.quantity = "fnu"
+
+    # A flat noise template on the detector pixels (or not)
+    template_lam = np.arange(1000.0, 3001.0, 40.0) * angstrom
+    instrument = IntegratedFieldUnit(
+        label="ifu",
+        lam=lam,
+        resolution=1 * arcsecond,
+        depth=100 * nJy,
+        snrs=5.0,
+        depth_lam=2000 * angstrom,
+        noise_shape_lam=template_lam,
+        noise_shape_std=np.ones(template_lam.size) * nJy,
+        template_on_detector=template_on_detector,
+    )
+
+    noisy = instrument.apply_noise(cube, rng_seed=42)
+
+    # Either way every voxel has a 1-sigma noise of depth / snrs
+    np.testing.assert_allclose(noisy.weight_map, 1 / 20.0**2)
+
+    # Two elements between the same pair of detector pixels are correlated
+    # only if the noise is drawn on the detector
+    corr = np.corrcoef(
+        noisy.noise_arr.value[:, :, 1].ravel(),
+        noisy.noise_arr.value[:, :, 2].ravel(),
+    )[0, 1]
+    if template_on_detector:
+        assert corr > 0.5
+    else:
+        assert abs(corr) < 0.25
+
+
+def test_ifu_aperture_depth_is_converted_to_per_pixel(
+    spectral_cube_with_central_source,
+):
+    """An aperture depth should be spread over the pixels it covers."""
+    cube = spectral_cube_with_central_source
+    instrument = IntegratedFieldUnit(
+        label="ifu",
+        lam=cube.lam,
+        resolution=1 * arcsecond,
+        depth=100 * nJy,
+        snrs=5.0,
+        depth_app_radius=2 * arcsecond,
+    )
+
+    noisy = instrument.apply_noise_to_cube(cube, rng_seed=42)
+
+    # The 20 nJy aperture noise is shared between pi (2 / 1)^2 pixels
+    sigma = 20.0 / np.sqrt(np.pi * 2.0**2)
+    np.testing.assert_allclose(noisy.weight_map, 1 / sigma**2)
+
+    # The input cube is left as it was
+    assert cube.arr.sum() == 3.0
 
 
 @pytest.mark.parametrize(
