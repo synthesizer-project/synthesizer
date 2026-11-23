@@ -4516,27 +4516,29 @@ def test_retried_batch_overwrites_appended_rows(tmp_path):
         np.testing.assert_array_equal(hdf["Galaxies/Product"], [[1], [2], [3]])
 
 
-def test_mass_grid_with_units_is_converted(nebular_emission_model):
-    """An SFZH/SFH grid carrying units is converted, not relabelled."""
+def test_sfh_with_units_is_converted_in_place(nebular_emission_model):
+    """An SFH carrying other units is converted in place, not relabelled."""
     from unyt import Msun, kg
 
     from synthesizer.units import Units
 
-    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
-
-    # A grid without units is already in the internal mass units, and is
-    # wrapped without copying
-    bare = np.ones(3)
-    grid = pipeline._mass_grid_in_internal_units(bare, "sfh")
-    assert grid.units == Units().mass
-    assert np.shares_memory(grid, bare)
-
-    # A grid in other mass units is converted
-    grid = pipeline._mass_grid_in_internal_units(
-        (np.ones(3) * Msun).to(kg), "sfh"
+    # A stand-in parametric galaxy whose stars hold an SFH in kg
+    log10ages = np.linspace(6.0, 10.0, 3)
+    stars = SimpleNamespace(
+        log10ages=log10ages, sfh=(np.ones(3) * Msun).to(kg)
     )
-    assert grid.units == Units().mass
-    np.testing.assert_allclose(grid.to_value(Msun), 1.0)
+    galaxy = SimpleNamespace(stars=stars)
+
+    # Get the SFH on the ages the stars already hold it on
+    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+    pipeline.get_sfh(log10ages)
+    sfh = pipeline._get_sfh(galaxy)
+
+    # It should be in the internal mass units, as should the stars' own SFH
+    # since the conversion is done in place rather than on a copy
+    assert sfh.units == stars.sfh.units == Units().mass
+    np.testing.assert_allclose(sfh.to_value(Msun), 1.0)
+    np.testing.assert_allclose(stars.sfh.to_value(Msun), 1.0)
 
 
 def test_flushed_strings_can_grow(tmp_path):

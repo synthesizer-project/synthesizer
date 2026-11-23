@@ -57,7 +57,7 @@ from synthesizer.pipeline.pipeline_utils import (
     write_timing_analysis_summary,
 )
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Units
+from synthesizer.units import Units, has_units, unyt_to_ndview
 from synthesizer.utils.art import Art
 from synthesizer.utils.operation_timers import (
     build_timing_analysis_rows,
@@ -1597,9 +1597,20 @@ class Pipeline:
             )
             return galaxy.sfzh
 
-        # Attach the internal mass units (and cast to the requested dtype)
-        # ready for writing
-        galaxy.sfzh = self._mass_grid_in_internal_units(galaxy.sfzh, "sfzh")
+        # A grid already carrying units is converted to the internal mass
+        # units in place (so we never copy it)
+        if has_units(galaxy.sfzh):
+            galaxy.sfzh = unyt_to_ndview(galaxy.sfzh, Units().mass)
+
+        # The grid is in the internal mass units but doesn't carry them, so
+        # attach them (and cast to the requested dtype) ready for writing
+        galaxy.sfzh = unyt_array(
+            np.asarray(
+                galaxy.sfzh,
+                dtype=resolve_out_dtype(self._out_dtypes.get("sfzh")),
+            ),
+            Units().mass,
+        )
 
         # Count the number of SFZH grids we have generated
         self._op_counts["SFZH"] += 1
@@ -1703,9 +1714,20 @@ class Pipeline:
             )
             return galaxy.sfh
 
-        # Attach the internal mass units (and cast to the requested dtype)
-        # ready for writing
-        galaxy.sfh = self._mass_grid_in_internal_units(galaxy.sfh, "sfh")
+        # A grid already carrying units is converted to the internal mass
+        # units in place (so we never copy it)
+        if has_units(galaxy.sfh):
+            galaxy.sfh = unyt_to_ndview(galaxy.sfh, Units().mass)
+
+        # The grid is in the internal mass units but doesn't carry them, so
+        # attach them (and cast to the requested dtype) ready for writing
+        galaxy.sfh = unyt_array(
+            np.asarray(
+                galaxy.sfh,
+                dtype=resolve_out_dtype(self._out_dtypes.get("sfh")),
+            ),
+            Units().mass,
+        )
 
         # Count the number of SFH grids we have generated
         self._op_counts["SFH"] += 1
@@ -4396,41 +4418,6 @@ class Pipeline:
 
         # Record the time taken
         self._op_timing["Extra Analyses"] += time.perf_counter() - start
-
-    def _mass_grid_in_internal_units(self, grid, op):
-        """Return an SFZH or SFH grid in the internal mass units.
-
-        Args:
-            grid (np.ndarray/unyt_array):
-                The grid. Arrays without units (or dimensionless) are
-                already in the internal mass units.
-            op (str):
-                The operation the grid is for ("sfzh" or "sfh"), used to
-                look up the requested output dtype.
-
-        Returns:
-            unyt_array:
-                The grid in the internal mass units with the requested dtype.
-        """
-        mass_units = Units().mass
-
-        # Convert any grid carrying other mass units, rather than relabelling
-        # it (this is the only case that copies the grid)
-        if (
-            isinstance(grid, unyt_array)
-            and not grid.units.is_dimensionless
-            and grid.units != mass_units
-        ):
-            grid = grid.to(mass_units)
-
-        # Otherwise the grid is in the internal mass units but doesn't carry
-        # them, so attach them (without copying unless the dtype changes)
-        return unyt_array(
-            np.asarray(
-                grid, dtype=resolve_out_dtype(self._out_dtypes.get(op))
-            ),
-            mass_units,
-        )
 
     @timed("Pipeline._unpack_results")
     def _unpack_results(self, galaxy):
