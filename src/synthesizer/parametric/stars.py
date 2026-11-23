@@ -490,6 +490,7 @@ class Stars(StarsComponent):
         masses[::2] = point_masses
         return np.repeat(np.asarray(points, dtype=np.float64), 2), masses
 
+    @timed("ParametricStars._get_age_bins")
     def _get_age_bins(self, offset):
         """Get the age bins and the mass formed in each.
 
@@ -531,6 +532,7 @@ class Stars(StarsComponent):
             " value, a SFH/ZH object, or an array must be passed"
         )
 
+    @timed("ParametricStars._get_metal_bins")
     def _get_metal_bins(self):
         """Get the metallicity bins and the weight of each.
 
@@ -612,6 +614,7 @@ class Stars(StarsComponent):
         masses = (age_masses[:, None] * metal_weights[None, :])[None]
         return edges, masses
 
+    @timed("ParametricStars._get_normalised_sfzh")
     def _get_normalised_sfzh(self, age_offset):
         """Get the correctly mass-scaled SFZH grid at an earlier lookback time.
 

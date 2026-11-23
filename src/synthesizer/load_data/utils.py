@@ -19,6 +19,8 @@ import math
 
 import numpy as np
 
+from synthesizer.utils.operation_timers import timed
+
 
 def cast_component_dtype(component, dtype):
     """Cast floating-point arrays in component input data to one dtype.
@@ -134,6 +136,7 @@ def split_age_bins(lo, hi, grid_ages):
     return np.concatenate(bin_index), np.concatenate(mid), np.concatenate(frac)
 
 
+@timed("bin_overlap_matrix")
 def bin_overlap_matrix(lo, hi, log10_grid_ages):
     """Fraction of each top-hat age bin given to each grid age.
 
