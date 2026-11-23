@@ -721,8 +721,10 @@ static void weight_loop_bic_omp(
 
 #pragma omp parallel num_threads(nthreads)
   {
-    /* Slice up the bins (flat index) between threads. */
-    const size_t per_thread = (nbins_total + nthreads - 1) / nthreads;
+    /* Slice up the bins (flat index) between the threads we actually got
+     * (the runtime can start fewer than we asked for). */
+    const size_t nteam = static_cast<size_t>(omp_get_num_threads());
+    const size_t per_thread = (nbins_total + nteam - 1) / nteam;
     const size_t start = omp_get_thread_num() * per_thread;
     const size_t end = std::min(start + per_thread, nbins_total);
 

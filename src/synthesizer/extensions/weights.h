@@ -24,15 +24,19 @@
  * @brief Performs a binary search for the index of an array corresponding to
  * a value.
  *
- * @tparam Real The floating-point type.
+ * The value keeps its own type, so a double precision value is compared with
+ * a single precision array without first being rounded onto it.
+ *
+ * @tparam Real The floating-point type of the array.
+ * @tparam Key The floating-point type of the value.
  * @param low: The initial low index (probably beginning of array).
  * @param high: The initial high index (probably size of array).
  * @param arr: The array to search in.
  * @param val: The value to search for.
  */
-template <typename Real>
+template <typename Real, typename Key>
 static inline int binary_search(int low, int high, const Real *arr,
-                                const Real val) {
+                                const Key val) {
 
   /* While we don't have a pair of adjacent indices. */
   int diff = high - low;
@@ -332,8 +336,8 @@ static inline void get_pop_bin_fracs_bic(const GridReal *grid_axis,
       inds.push_back(dim_size - 1);
       fracs.push_back(1.0);
     } else {
-      const int upper = binary_search(/*low=*/0, /*high=*/dim_size - 1,
-                                      grid_axis, static_cast<GridReal>(u));
+      const int upper =
+          binary_search(/*low=*/0, /*high=*/dim_size - 1, grid_axis, u);
       const double g_lo = static_cast<double>(grid_axis[upper - 1]);
       const double g_hi = static_cast<double>(grid_axis[upper]);
       const double frac = (u - g_lo) / (g_hi - g_lo);
@@ -357,9 +361,7 @@ static inline void get_pop_bin_fracs_bic(const GridReal *grid_axis,
   int k = 0;
   if (lo > x_first) {
     const double u_lo = log_axis ? std::log10(lo) : lo;
-    k = binary_search(/*low=*/0, /*high=*/dim_size - 1, grid_axis,
-                      static_cast<GridReal>(u_lo)) -
-        1;
+    k = binary_search(/*low=*/0, /*high=*/dim_size - 1, grid_axis, u_lo) - 1;
   }
 
   /* Split the mass between the two points bounding each overlapped grid

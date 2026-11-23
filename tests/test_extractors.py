@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-from unyt import Hz, Msun, erg, s, yr
+from unyt import Hz, Msun, Myr, erg, s, yr
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.emission_models.extractors.extractor import (
@@ -16,7 +16,10 @@ from synthesizer.emission_models.extractors.extractor import (
     ParticleExtractorBase,
 )
 from synthesizer.emissions import Sed
-from synthesizer.exceptions import InconsistentArguments
+from synthesizer.exceptions import (
+    InconsistentArguments,
+    UnimplementedFunctionality,
+)
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle import Stars as ParticleStars
 
@@ -719,6 +722,7 @@ def test_integrated_parametric_fixed_axis_not_reused(test_grid):
     # Extract with a model that doesn't fix anything, storing the weights
     stars = make_stars()
     stars.get_spectra(IncidentEmission(test_grid))
+    assert test_grid.grid_name in stars._grid_weights["bic"]
 
     # Extract the same stars with a model fixing the age
     fixed = stars.get_spectra(IncidentEmission(test_grid, log10ages=7.0))
@@ -885,3 +889,34 @@ def test_do_grid_check_warns(test_grid, nebular_emission_model):
         )
     mock_warn.assert_called_once()
     assert "50.00%" in mock_warn.call_args[0][0]
+
+
+def test_parametric_mask_on_fixed_axis_raises(test_grid):
+    """Test a mask on a bin axis the model fixes is refused.
+
+    The mask selects on the emitter's own ages, which are lost once the
+    bins collapse onto the model's fixed age.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+    """
+    # Create a Stars on the grid's axes
+    stars = ParametricStars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sfzh=np.ones((test_grid.log10ages.size, test_grid.metallicities.size)),
+    )
+
+    # A model fixing the age and masking on the emitter's ages
+    model = IncidentEmission(
+        test_grid,
+        log10ages=7.5,
+        mask_attr="ages",
+        mask_thresh=10 * Myr,
+        mask_op="<",
+    )
+
+    # Extracting must refuse rather than drop the selected mass
+    with pytest.raises(UnimplementedFunctionality):
+        stars.get_spectra(model)

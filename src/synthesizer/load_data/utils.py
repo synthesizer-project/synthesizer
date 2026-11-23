@@ -158,6 +158,10 @@ def bin_overlap_matrix(lo, hi, log10_grid_ages):
 
     Returns:
         np.ndarray of float: (nbin, ngrid) overlap fractions.
+
+    Raises:
+        ValueError:
+            If lo and hi have different lengths.
     """
     # Imported here to avoid importing the extension at module load
     from synthesizer.extensions.parametric_spectra import (
@@ -171,7 +175,7 @@ def bin_overlap_matrix(lo, hi, log10_grid_ages):
     # The bins needn't share edges, so spread them onto the grid one by one
     # (a bin without a positive width is a burst at its lower edge)
     overlap = np.empty((len(lo), len(log10_grid_ages)))
-    for ibin, (lower, upper) in enumerate(zip(lo, hi)):
+    for ibin, (lower, upper) in enumerate(zip(lo, hi, strict=True)):
         overlap[ibin] = compute_parametric_weights(
             log10ages,
             (np.array((lower, max(lower, upper)), dtype=np.float64),),

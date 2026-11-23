@@ -719,7 +719,20 @@ class Stars(StarsComponent):
         Returns:
             tuple:
                 The bin edges keyed by axis name and the bin masses.
+
+        Raises:
+            InconsistentArguments:
+                If the SFZH doesn't have a mass for every point of the axes.
         """
+        # The SFZH must have a mass for every point of the axes (any other
+        # shape would be silently broadcast onto them)
+        shape = (self.ages.size, np.size(self.metallicities))
+        if np.shape(sfzh) != shape:
+            raise exceptions.InconsistentArguments(
+                "The SFZH must have shape (n_ages, n_metallicities) = "
+                f"{shape}, got {np.shape(sfzh)}."
+            )
+
         # Repeating each point gives a zero width bin at it, with a finite
         # bin between each pair of points
         age_edges = np.repeat(convert_in_place(self.ages, yr).ndview, 2)

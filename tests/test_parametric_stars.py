@@ -1176,6 +1176,7 @@ class TestBinnedSFH:
         param = stars.get_spectra(model).lnu.value
         part = particles.get_spectra(model).lnu.value
         good = part > part.max() * 1e-6
+        assert good.any()
         np.testing.assert_allclose(param[good], part[good], rtol=2e-3)
 
 
@@ -1378,3 +1379,19 @@ def test_scale_mass_by_luminosity_rescales_sfh(test_grid, filters_UVJ):
     np.testing.assert_allclose(stars.sfh, np.sum(stars.sfzh, axis=1))
     np.testing.assert_allclose(stars.metal_dist, np.sum(stars.sfzh, axis=0))
     np.testing.assert_allclose(np.sum(stars.sfh), 2e9, rtol=1e-3)
+
+
+def test_sfzh_shape_is_validated(test_grid):
+    """An explicit SFZH that doesn't match the axes must raise.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+    """
+    # A 1D array would otherwise broadcast along the age axis
+    with pytest.raises(exceptions.InconsistentArguments):
+        Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sfzh=np.ones(test_grid.metallicities.size),
+        )

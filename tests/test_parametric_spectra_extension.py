@@ -5,6 +5,7 @@ import pytest
 from synthesizer.extensions.integrated_spectra import compute_integrated_sed
 from synthesizer.extensions.parametric_spectra import (
     compute_integrated_parametric_sed,
+    compute_parametric_weights,
 )
 
 # An irregular 3D grid: a log10 age axis, a log10 metallicity axis and a
@@ -542,3 +543,31 @@ def test_invalid_inputs_name_the_axis():
             None,
             ("log10ages", "log10metallicities", "x"),
         )
+
+
+def test_point_between_adjacent_float32_grid_points():
+    """A float64 point must not be rounded onto a float32 grid point.
+
+    The grid points are one float32 step apart, so rounding the point to
+    float32 would move it onto a grid point and into the wrong interval.
+    """
+    # A float32 grid whose points are adjacent floats
+    eps = float(np.spacing(np.float32(1.0)))
+    grid = (np.array([1.0, 1.0 + eps, 1.0 + 2 * eps], dtype=np.float32),)
+
+    # Spread a unit mass point three quarters of the way to the second point
+    point = 1.0 + 0.75 * eps
+    weights = compute_parametric_weights(
+        grid,
+        (np.array([point, point]),),
+        np.ones((1, 1)),
+        (False,),
+        (0,),
+        (1.0,),
+        1,
+        None,
+        ("axis",),
+    )
+
+    # It must be split linearly between the two points bounding it
+    np.testing.assert_allclose(weights, [0.25, 0.75, 0.0])

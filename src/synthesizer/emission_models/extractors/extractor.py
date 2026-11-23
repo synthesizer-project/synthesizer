@@ -1494,7 +1494,7 @@ class ParametricExtractorBase(Extractor):
     """
 
     @timed("ParametricExtractorBase.get_emitter_attrs")
-    def get_emitter_attrs(self, emitter, model, do_grid_check):
+    def get_emitter_attrs(self, emitter, model, do_grid_check, mask=None):
         """Get the attributes from the emitter.
 
         The attributes are the bin edges along each grid axis. A grid axis
@@ -1514,6 +1514,9 @@ class ParametricExtractorBase(Extractor):
                 This is a sanity check that can be used to check the
                 consistency of your populations with the grid. It is False
                 by default.
+            mask (np.ndarray of float):
+                The allowed range along each bin axis (see
+                parametric.Stars.get_mask), or None.
 
         Returns:
             tuple
@@ -1526,6 +1529,8 @@ class ParametricExtractorBase(Extractor):
                 If the emitter is binned along an axis the grid doesn't have,
                 or a grid axis the emitter isn't binned along doesn't have a
                 single value.
+            UnimplementedFunctionality:
+                If the mask narrows a bin axis the model fixes.
         """
         # Get the bin axis behind each grid axis (without any log10 prefix)
         grid_bin_axes = [
@@ -1577,6 +1582,18 @@ class ParametricExtractorBase(Extractor):
                     emitter.get_bin_edges(bin_axis, values_only=True)
                 )
                 continue
+
+            # A mask narrowing this axis selects on the emitter's own bins,
+            # which are lost once they collapse onto the model's value (an
+            # emptied range excludes the whole population, which still works)
+            if mask is not None and bin_axis in emitter.bin_axes:
+                lo, hi = mask[emitter.bin_axes.index(bin_axis)]
+                bound = np.finfo(np.float64).max
+                if lo <= hi and (lo > -bound or hi < bound):
+                    raise exceptions.UnimplementedFunctionality(
+                        f"Can't mask a {emitter.__class__.__name__} on "
+                        f"{bin_axis} when the model fixes {axis}."
+                    )
 
             # Otherwise, get the attribute from the model or emitter
             value = get_param(axis, model, None, emitter, preserve_units=True)
@@ -1772,7 +1789,7 @@ class IntegratedParametricExtractor(ParametricExtractorBase):
 
         # Get the attributes and weights from the emitter
         extracted, weight, bin_axes, unit_scales = self.get_emitter_attrs(
-            emitter, model, do_grid_check
+            emitter, model, do_grid_check, mask
         )
 
         # If nthreads is -1 then use all available threads
@@ -1863,7 +1880,7 @@ class IntegratedParametricExtractor(ParametricExtractorBase):
 
         # Get the attributes and weights from the emitter
         extracted, weight, bin_axes, unit_scales = self.get_emitter_attrs(
-            emitter, model, do_grid_check
+            emitter, model, do_grid_check, mask
         )
 
         # If nthreads is -1 then use all available threads
