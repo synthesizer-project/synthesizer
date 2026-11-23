@@ -1,17 +1,21 @@
 """Utility helpers for instrument-related workflows.
 
-This module currently provides helpers for constructing wavelength grids from
-resolving power, for inspecting the available premade instruments, and for
-reading and writing instrument attributes to and from HDF5.
+This module currently provides helpers for constructing wavelength grids and
+line spread functions from resolving power, for inspecting the available
+premade instruments, and for reading and writing instrument attributes to and
+from HDF5.
 """
 
 import inspect
 import os
-from typing import Callable, Union
+from typing import Callable, Optional, Union
 
 import h5py
+import numpy as np
+from scipy.special import erf
 from unyt import angstrom, unyt_array, unyt_quantity
 
+from synthesizer import exceptions
 from synthesizer.units import accepts
 
 
@@ -69,6 +73,76 @@ def get_lams_from_resolving_power(
 
     # Preserve existing units without squaring them
     return unyt_array(wavelengths)
+
+
+@accepts(lam=angstrom, resolving_power_lam=angstrom)
+def get_lsfs_from_resolving_power(
+    lam: unyt_array,
+    resolving_power: Union[
+        float, Callable[[unyt_quantity], float], np.ndarray
+    ],
+    lsf_resample_factor: int = 1,
+    resolving_power_lam: Optional[unyt_array] = None,
+    nsigma: float = 5,
+) -> np.ndarray:
+    """Generate Gaussian line spread function kernels from a resolving power.
+
+    This function creates a Gaussian kernel for each wavelength in `lam`,
+    with a FWHM of the wavelength divided by the resolving power there.
+    The kernels can be passed to a SpectroscopicInstrument as its `lsfs`
+    (or to its `set_lsfs` method), together with the same
+    `lsf_resample_factor`.
+
+    Args:
+        lam (unyt_array): The wavelengths of the instrument.
+        resolving_power (float or callable or array): Resolving power
+            (R = λ / Δλ). Can be a constant value, a function that takes a
+            wavelength with units and returns a resolving power, or an array
+            of values at `resolving_power_lam`.
+        lsf_resample_factor (int): The LSF supersampling factor. The kernels
+            are sampled on wavelength bins this many times finer than `lam`.
+        resolving_power_lam (unyt_array, optional): The wavelengths of a
+            tabulated resolving power. They must cover the wavelength range
+            of `lam`.
+        nsigma (float): The half width of the kernels, in standard
+            deviations of the broadest Gaussian.
+
+    Returns:
+        np.ndarray: The kernels with shape (nwave, nkernel), each summing to
+            unity.
+
+    Raises:
+        InconsistentArguments: If a tabulated resolving power does not cover
+            `lam`.
+    """
+    # Get the resolving power at each wavelength
+    if callable(resolving_power):
+        resolving_power = np.array([resolving_power(wav) for wav in lam])
+    elif resolving_power_lam is not None:
+        # A table must reach to within a wavelength element of each end
+        if lam[0] < resolving_power_lam[0] - (lam[1] - lam[0]) or lam[
+            -1
+        ] > resolving_power_lam[-1] + (lam[-1] - lam[-2]):
+            raise exceptions.InconsistentArguments(
+                "resolving_power_lam must cover the wavelengths in lam."
+            )
+        resolving_power = np.interp(
+            lam.value, resolving_power_lam.value, resolving_power
+        )
+
+    # Get the standard deviation of each Gaussian in bins (its full width at
+    # half maximum is the wavelength over the resolving power)
+    sigma = lam.value / resolving_power / (2 * np.sqrt(2 * np.log(2)))
+    sigma *= lsf_resample_factor / np.gradient(lam.value)
+
+    # Make every kernel wide enough for the broadest Gaussian
+    half_width = int(np.ceil(nsigma * sigma.max()))
+    bin_edges = np.arange(-half_width, half_width + 2) - 0.5
+
+    # Integrate each Gaussian over each bin
+    kernels = np.diff(erf(bin_edges / (np.sqrt(2) * sigma[:, None])), axis=1)
+
+    return kernels / kernels.sum(axis=1, keepdims=True)
 
 
 def write_instrument_attribute(group, name, value):

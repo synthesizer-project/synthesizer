@@ -294,6 +294,8 @@ class Galaxy(BaseGalaxy):
             child.photo_fnu = {}
             child.spectroscopy_lnu = {}
             child.spectroscopy_fnu = {}
+            child.spectroscopy_lsf_lnu = {}
+            child.spectroscopy_lsf_fnu = {}
             child.images_lnu = {}
             child.images_fnu = {}
             child.images_psf_lnu = {}

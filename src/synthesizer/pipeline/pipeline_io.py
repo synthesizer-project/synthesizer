@@ -6,8 +6,9 @@ handling the MPI communications for parallel I/O operations.
 
 Example usage:
 
-    # Write data to an HDF5 file
-    writer = PipelineIO("output.hdf5")
+    # Hold the outputs in buffers and write them to an HDF5 file
+    buffers = PipelineIOBuffers()
+    writer = PipelineIO(buffers, "output.hdf5")
     writer.write_data(data, key)
 
 
@@ -210,6 +211,14 @@ class PipelineIOBuffers:
             "_write_spectroscopy_fnu",
             "Spectroscopy/SpectralFluxDensities",
         ),
+        "spectroscopy_lsf_lnu": (
+            "_write_spectroscopy_lnu",
+            "LSFSpectroscopy/SpectralLuminosityDensities",
+        ),
+        "spectroscopy_lsf_fnu": (
+            "_write_spectroscopy_fnu",
+            "LSFSpectroscopy/SpectralFluxDensities",
+        ),
     }
 
     # Where each per-galaxy output comes from (see unpack): the attribute
@@ -257,6 +266,8 @@ class PipelineIOBuffers:
         ),
         "spectroscopy_lnu": ("spectroscopy_lnu", 2, "lnu"),
         "spectroscopy_fnu": ("spectroscopy_fnu", 2, "fnu"),
+        "spectroscopy_lsf_lnu": ("spectroscopy_lsf_lnu", 2, "lnu"),
+        "spectroscopy_lsf_fnu": ("spectroscopy_lsf_fnu", 2, "fnu"),
     }
 
     # The group each component's outputs are written beneath
@@ -420,6 +431,14 @@ class PipelineIOBuffers:
         default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
     )
     spectroscopy_fnu: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    spectroscopy_lsf_lnu: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    spectroscopy_lsf_fnu: dict = field(
         init=False,
         default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
     )
@@ -911,7 +930,8 @@ class PipelineIO:
         self.is_root = self.rank == 0
         self.is_collective = self.is_parallel and self.PARALLEL and parallel_io
 
-        # TODO: fix collective I/O
+        # TODO: fix collective I/O (it also can't append, so it will need
+        # to be rejected or reworked when flushing outputs while running)
         if self.is_collective:
             self.is_collective = False
             warn(
@@ -1321,8 +1341,11 @@ class PipelineIO:
                 f"{data.shape}, dtype {data.dtype}, units {units}."
             )
 
-        # Extend the galaxy axis and fill it
-        nexisting = dset.shape[0]
+        # Extend the galaxy axis and fill it. We write after the rows of
+        # the batches already written in full (rather than at the end of the
+        # dataset) so retrying a batch that failed partway overwrites the
+        # rows it already appended instead of duplicating them
+        nexisting = self.rows_written
         dset.resize(nexisting + data.shape[0], axis=0)
         dset[nexisting:, ...] = data
         return True
@@ -1447,8 +1470,10 @@ class PipelineIO:
             # the structure we are writing. Per-galaxy data can be flushed at
             # different times on different ranks, so don't try to
             # synchronise here. The file combiners handle missing datasets
-            # when all ranks have finished writing.
-            if self.is_parallel and not per_galaxy:
+            # when all ranks have finished writing. Collective I/O is the
+            # exception: every rank writes the same datasets in the same
+            # file, so they must all agree on the structure.
+            if self.is_parallel and (not per_galaxy or self.is_collective):
                 data = unify_dict_structure_across_ranks(data, self.comm)
 
             # Early exit if data is empty. Zero-row per-galaxy arrays are

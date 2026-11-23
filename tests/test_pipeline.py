@@ -29,7 +29,9 @@ from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 from synthesizer.particle.stars import Stars
 from synthesizer.pipeline.pipeline import Pipeline
 from synthesizer.pipeline.pipeline_utils import (
+    accumulate_pipeline_results_from_child,
     cached_split,
+    clear_pipeline_outputs,
     combine_list_of_dicts,
     count_and_check_dict_recursive,
     discover_attr_paths_recursive,
@@ -1084,6 +1086,49 @@ class TestPipelineOperations:
                 for spec_type in group:
                     assert group[spec_type].shape == (ngal, inst.lam.size)
                     assert group[spec_type].attrs["Units"] == units
+
+    def test_pipeline_writes_lsf_spectroscopy(
+        self, pipeline_with_galaxies, tmp_path
+    ):
+        """Test the pipeline writes spectroscopy with an LSF applied.
+
+        It should be written next to the spectroscopy without the LSF, only
+        for instruments that have an LSF.
+        """
+        # Request both kinds of spectroscopy for an instrument with an LSF
+        # and one without
+        lam = np.linspace(4000.0, 8000.0, 100) * angstrom
+        instruments = (
+            SpectroscopicInstrument(
+                "lsf", lam=lam, lsfs=np.tile([0.25, 0.5, 0.25], (100, 1))
+            ),
+            SpectroscopicInstrument("plain", lam=lam),
+        )
+        ngal = len(pipeline_with_galaxies.galaxies)
+        for inst in instruments:
+            pipeline_with_galaxies.get_spectroscopy_lnu(inst)
+            pipeline_with_galaxies.get_spectroscopy_fnu(inst, cosmo=cosmo)
+        pipeline_with_galaxies.run()
+        output = tmp_path / "spectroscopy.hdf5"
+        pipeline_with_galaxies.write(output)
+
+        # Both instruments have spectroscopy without the LSF. Only the one
+        # with an LSF has spectroscopy with it: one spectrum per galaxy per
+        # type, differing from the spectrum without
+        with h5py.File(output) as hdf:
+            for name in (
+                "SpectralLuminosityDensities",
+                "SpectralFluxDensities",
+            ):
+                plain = hdf[f"Galaxies/Stars/Spectroscopy/{name}"]
+                group = hdf[f"Galaxies/Stars/LSFSpectroscopy/{name}"]
+                assert set(plain) == {"lsf", "plain"}
+                assert set(group) == {"lsf"}
+                assert len(group["lsf"]) > 0
+                for spec_type in group["lsf"]:
+                    spec = group["lsf"][spec_type][...]
+                    assert spec.shape == (ngal, lam.size)
+                    assert not np.allclose(spec, plain["lsf"][spec_type])
 
     def test_pipeline_writes_data_cubes(
         self,
@@ -3037,6 +3082,95 @@ class TestGalaxySplitting:
         pipeline.add_galaxies(galaxies)
         return pipeline
 
+    def test_split_matches_unsplit_lsf_spectroscopy(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+    ):
+        """Spectroscopy with an LSF should be chunk-invariant."""
+        split_threshold = max(2, random_particle_galaxy.stars.nparticles // 4)
+        instrument = SpectroscopicInstrument(
+            "lsf",
+            lam=np.linspace(4000.0, 8000.0, 100) * angstrom,
+            lsfs=np.tile([0.25, 0.5, 0.25], (100, 1)),
+        )
+
+        # Run the same galaxy whole and in chunks
+        results = []
+        for max_npart in (None, split_threshold):
+            pipeline = self._make_pipeline(
+                copy.deepcopy(nebular_emission_model),
+                [copy.deepcopy(random_particle_galaxy)],
+                max_npart=max_npart,
+            )
+            pipeline.get_spectroscopy_fnu(instrument, cosmo=cosmo)
+            pipeline.run()
+            results.append(
+                pipeline.io_buffers.spectroscopy_lsf_fnu["Stars"]["lsf"]
+            )
+
+        # The chunks add up to the spectroscopy of the whole galaxy
+        assert len(results[0]) > 0
+        for spec_type, spec in results[0].items():
+            np.testing.assert_allclose(results[1][spec_type], spec, rtol=1e-5)
+
+    def test_processed_data_cubes_accumulate_and_clear(self):
+        """Processed data cubes are summed onto the parent and cleared."""
+
+        def make_galaxy(value):
+            """Return a stand-in galaxy holding cubes on it and its stars.
+
+            Args:
+                value (float):
+                    The value filling every cube.
+
+            Returns:
+                SimpleNamespace:
+                    The stand-in galaxy.
+            """
+            # Hold a raw and processed cube on the galaxy and its stars
+            cubes = {
+                attr: {"IFU": {"total": np.full((2, 2, 3), value)}}
+                for attr in (
+                    "data_cubes_lnu",
+                    "data_cubes_fnu",
+                    "processed_data_cubes_lnu",
+                    "processed_data_cubes_fnu",
+                )
+            }
+            return SimpleNamespace(
+                stars=SimpleNamespace(**copy.deepcopy(cubes)),
+                gas=None,
+                black_holes=None,
+                **cubes,
+            )
+
+        # Accumulate two child chunks onto an empty parent
+        parent = SimpleNamespace(
+            stars=SimpleNamespace(), gas=None, black_holes=None
+        )
+        accumulate_pipeline_results_from_child(
+            parent, make_galaxy(1.0), make_galaxy(2.0)
+        )
+
+        # The parent and its stars should hold the sum of the chunks
+        for obj in (parent, parent.stars):
+            for attr in (
+                "data_cubes_lnu",
+                "data_cubes_fnu",
+                "processed_data_cubes_lnu",
+                "processed_data_cubes_fnu",
+            ):
+                np.testing.assert_array_equal(
+                    getattr(obj, attr)["IFU"]["total"], 3.0
+                )
+
+        # Clearing the outputs should leave nothing behind for a later run
+        clear_pipeline_outputs(parent)
+        for obj in (parent, parent.stars):
+            assert obj.processed_data_cubes_lnu == {}
+            assert obj.processed_data_cubes_fnu == {}
+
     def test_split_matches_unsplit_integrated_outputs(
         self,
         random_particle_galaxy,
@@ -4359,6 +4493,50 @@ def test_late_product_backfills_flushed_rows(tmp_path):
     io.write_data(np.array([[3.0]]), "Galaxies/Product")
     with h5py.File(io.filepath) as hdf:
         np.testing.assert_array_equal(hdf["Galaxies/Product"], [[0], [0], [3]])
+
+
+def test_retried_batch_overwrites_appended_rows(tmp_path):
+    """Retrying a batch that failed partway doesn't duplicate its rows."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Set up a serial writer which has already flushed two galaxies
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "retried.hdf5")
+    io.is_parallel = io.is_collective = False
+    io.verbose, io._start_time = 0, time.perf_counter()
+    io.rows_written = 0
+    io.write_data(np.array([[1.0], [2.0]]), "Galaxies/Product")
+    io.rows_written = 2
+
+    # Write the next batch twice, as if the batch failed on a later dataset
+    # (so the rows written were never counted) and was then retried
+    for _ in range(2):
+        io.write_data(np.array([[3.0]]), "Galaxies/Product")
+    with h5py.File(io.filepath) as hdf:
+        np.testing.assert_array_equal(hdf["Galaxies/Product"], [[1], [2], [3]])
+
+
+def test_mass_grid_with_units_is_converted(nebular_emission_model):
+    """An SFZH/SFH grid carrying units is converted, not relabelled."""
+    from unyt import Msun, kg
+
+    from synthesizer.units import Units
+
+    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+
+    # A grid without units is already in the internal mass units, and is
+    # wrapped without copying
+    bare = np.ones(3)
+    grid = pipeline._mass_grid_in_internal_units(bare, "sfh")
+    assert grid.units == Units().mass
+    assert np.shares_memory(grid, bare)
+
+    # A grid in other mass units is converted
+    grid = pipeline._mass_grid_in_internal_units(
+        (np.ones(3) * Msun).to(kg), "sfh"
+    )
+    assert grid.units == Units().mass
+    np.testing.assert_allclose(grid.to_value(Msun), 1.0)
 
 
 def test_flushed_strings_can_grow(tmp_path):
