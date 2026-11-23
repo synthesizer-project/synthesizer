@@ -709,52 +709,6 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             "IntegratedFieldUnit.apply_psf only supports SpectralCube objects."
         )
 
-    @timed("IntegratedFieldUnit._check_noise_configuration")
-    def _check_noise_configuration(self, simspin_snr=None):
-        """Ensure a noise model can be applied.
-
-        Args:
-            simspin_snr (float, optional): The SimSpin S/N.
-
-        Raises:
-            UnimplementedFunctionality: If noise source maps are set.
-            MissingArgument: If there is no noise model to apply.
-            InconsistentArguments: If simspin_snr is not positive.
-        """
-        if self.noise_source_maps is not None:
-            raise exceptions.UnimplementedFunctionality(
-                "Correlated noise from noise source maps is not implemented "
-                "yet for spectral cubes."
-            )
-        super()._check_noise_configuration(simspin_snr=simspin_snr)
-
-    @timed("IntegratedFieldUnit._get_noise_level")
-    def _get_noise_level(self, resolution=None):
-        """Return the target 1-sigma noise per pixel.
-
-        This is depth / snrs. If depth_app_radius is set the depth is an
-        aperture depth, and, as for imaging, the noise in the aperture is
-        converted to per pixel, sigma_pix = sigma_ap / sqrt(N_pix) with
-        N_pix = pi r^2 / resolution^2 (assuming independent pixels).
-
-        Args:
-            resolution (unyt_quantity, optional): The pixel size of the
-                spectral cube.
-
-        Returns:
-            unyt_quantity: The target 1-sigma noise per pixel.
-        """
-        noise_level = super()._get_noise_level(resolution)
-
-        # Convert the total noise in the aperture to per pixel
-        if resolution is not None and self.depth_app_radius is not None:
-            app_radius_pix = float(
-                (self.depth_app_radius / resolution).to("dimensionless")
-            )
-            noise_level = noise_level / np.sqrt(np.pi * app_radius_pix**2)
-
-        return noise_level
-
     @timed("IntegratedFieldUnit.apply_noise_to_cube")
     def apply_noise_to_cube(
         self,
@@ -802,7 +756,12 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                 "generate_data_cube_hist() or generate_data_cube_smoothed() "
                 "before applying noise."
             )
-        self._check_noise_configuration(simspin_snr=simspin_snr)
+        # Correlated noise from noise source maps has no machinery yet
+        if self.noise_source_maps is not None:
+            raise exceptions.UnimplementedFunctionality(
+                "Correlated noise from noise source maps is not implemented "
+                "yet for spectral cubes."
+            )
 
         # The noise is defined in physical units, so the cube needs them
         if cube.units is None:
@@ -811,29 +770,31 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             )
         units = getattr(cube.units, "units", cube.units)
 
-        # Get the noise, either the fixed noise cube or a new realisation
-        if simspin_snr is None and self.noise_maps is not None:
-            if self.noise_maps.shape != cube.arr.shape:
-                raise exceptions.InconsistentArguments(
-                    f"{self.label}: noise_maps must have the cube's shape "
-                    f"{cube.arr.shape}, not {self.noise_maps.shape}."
+        # Get the noise level per pixel from the depth. As for imaging, an
+        # aperture depth is the noise in the aperture, so it is converted to
+        # per pixel, sigma_pix = sigma_ap / sqrt(N_pix) with
+        # N_pix = pi r^2 / resolution^2 (assuming independent pixels)
+        noise_level = None
+        if self.depth is not None:
+            noise_level = self.depth / self.snrs
+            if self.depth_app_radius is not None:
+                app_radius_pix = float(
+                    (self.depth_app_radius / cube.resolution).to(
+                        "dimensionless"
+                    )
                 )
-            noise = self.noise_maps.to(units).value
+                noise_level = noise_level / np.sqrt(np.pi * app_radius_pix**2)
 
-            # As for imaging, the weight map comes from the noise's std
-            err = np.full(cube.arr.shape, np.std(noise))
-            err[np.isnan(cube.arr)] = np.nan
-        else:
-            # Treat each pixel as a spectrum
-            rng = np.random.default_rng(rng_seed)
-            noise, err = self._generate_noise(
-                cube.arr,
-                cube.lam,
-                units,
-                rng,
-                resolution=cube.resolution,
-                simspin_snr=simspin_snr,
-            )
+        # Generate the noise, treating each pixel as a spectrum
+        rng = np.random.default_rng(rng_seed)
+        noise, weight_map = self._generate_noise(
+            cube.arr,
+            cube.lam,
+            units,
+            rng,
+            noise_level=noise_level,
+            simspin_snr=simspin_snr,
+        )
 
         # Work on the original cube when requested, otherwise create a fresh
         # container
@@ -852,13 +813,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         # Add the noise and store it with the weight map
         working_cube.arr = cube.arr + noise
         working_cube.noise_arr = unyt_array(noise, units)
-
-        # Weight map is 1 / err**2, with 0 where err is NaN and inf where
-        # it is 0 (e.g. pixels without flux under SimSpin noise).
-        with np.errstate(divide="ignore", invalid="ignore"):
-            working_cube.weight_map = np.where(
-                np.isnan(err), 0.0, 1.0 / err**2
-            )
+        working_cube.weight_map = weight_map
 
         return working_cube
 

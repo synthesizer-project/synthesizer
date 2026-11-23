@@ -270,7 +270,12 @@ class SpectroscopicInstrument(InstrumentBase):
                 "The depth and SNR must be single values, not dictionaries."
             )
 
-        # The noise is added in physical units, so noise maps need units
+        # The noise is added in physical units, so the depth and noise maps
+        # need units
+        if self.depth is not None and not isinstance(self.depth, unyt_array):
+            raise exceptions.InconsistentArguments(
+                "The depth must have units."
+            )
         if self.noise_maps is not None and not isinstance(
             self.noise_maps, unyt_array
         ):
@@ -438,16 +443,6 @@ class SpectroscopicInstrument(InstrumentBase):
         return (
             self.depth is not None and self.snrs is not None
         ) or self.noise_maps is not None
-
-    @property
-    def _correlated_noise(self):
-        """Return whether depth+SNR noise is correlated between elements.
-
-        It is when the noise template is on the detector pixels; otherwise
-        (a template on other wavelengths, or flat noise) each wavelength
-        element gets independent noise.
-        """
-        return self.noise_shape_std is not None and self.template_on_detector
 
     @property
     def can_do_lsf_spectroscopy(self):
@@ -779,182 +774,31 @@ class SpectroscopicInstrument(InstrumentBase):
 
         return edges, bin_matrix
 
-    @timed("SpectroscopicInstrument._check_noise_configuration")
-    def _check_noise_configuration(self, simspin_snr=None):
-        """Ensure a noise model can be applied.
+    @timed("SpectroscopicInstrument._get_noise_std")
+    def _get_noise_std(self, lam, units, noise_level):
+        """Return the 1-sigma depth+SNR noise of each wavelength element.
 
-        The noise comes from SimSpin if simspin_snr is given, otherwise from
-        the instrument's noise maps, or its depth and SNR.
-
-        Args:
-            simspin_snr (float, optional): The SimSpin S/N.
-
-        Raises:
-            MissingArgument: If there is no noise model to apply.
-            InconsistentArguments: If simspin_snr is not positive.
-        """
-        # SimSpin noise needs only its S/N
-        if simspin_snr is not None:
-            if not simspin_snr > 0:
-                raise exceptions.InconsistentArguments(
-                    "simspin_snr must be positive."
-                )
-            return
-
-        # Otherwise the instrument must define noise maps or depth+SNR noise
-        if self.noise_maps is None and (
-            self.depth is None or self.snrs is None
-        ):
-            raise exceptions.MissingArgument(
-                "The instrument has no spectroscopic noise configuration. "
-                "Provide depth and snrs or noise_maps, or pass simspin_snr."
-            )
-
-    @timed("SpectroscopicInstrument._get_noise_level")
-    def _get_noise_level(self, resolution=None):
-        """Return the target 1-sigma noise, depth / snrs.
-
-        As for imaging, this is the noise per wavelength element for a point
-        source depth.
-
-        Args:
-            resolution (unyt_quantity, optional): The pixel size of a
-                spectral cube. Not used here; the IntegratedFieldUnit uses it
-                to convert aperture depths to per pixel.
-
-        Returns:
-            unyt_quantity: The target 1-sigma noise.
-
-        Raises:
-            InconsistentArguments: If the depth has no units.
-        """
-        # The spectra always have units, so the depth must too
-        if not isinstance(self.depth, unyt_array):
-            raise exceptions.InconsistentArguments(
-                "The depth must have units to generate noise."
-            )
-
-        # Calculate the noise in a wavelength element for a point source
-        return self.depth / self.snrs
-
-    @timed("SpectroscopicInstrument._get_noise_quantity")
-    def _get_noise_quantity(self, sed, units):
-        """Return which of an SED's spectra noise in units applies to.
-
-        Args:
-            sed (Sed): The SED.
-            units (unyt.Unit): The units of the depth or noise maps.
-
-        Returns:
-            str: "fnu" if units are a flux density per unit frequency,
-                "lnu" if they are a luminosity density per unit frequency.
-
-        Raises:
-            InconsistentArguments: If units are neither.
-        """
-        for quantity in ("fnu", "lnu"):
-            if units.dimensions == get_quantity_unit(sed, quantity).dimensions:
-                return quantity
-        raise exceptions.InconsistentArguments(
-            f"{self.label}: the noise units {units} are neither a flux "
-            "density (fnu) nor a luminosity density (lnu) per unit frequency."
-        )
-
-    @timed("SpectroscopicInstrument._get_noise_interp_weights")
-    def _get_noise_interp_weights(self, lam):
-        """Return the indices and weights interpolating the template onto lam.
-
-        Wavelength element j is (1 - w[j]) * template[i_lo[j]]
-        + w[j] * template[i_lo[j] + 1]. Wavelengths outside the template
-        use its nearest end.
+        The noise is alpha * shape(lambda). Without a noise template the
+        shape is flat (ones). With one, the template is interpolated onto
+        lam: for "correlated" noise (template_on_detector) the shape is the
+        noise the interpolated detector noise has,
+        sigma_j^2 = [(1 - w)^2 sigma_lo^2 + w^2 sigma_hi^2]
+        / [(1 - w)^2 + w^2], and for "independent" noise it is the template
+        linearly interpolated onto lam. Wavelength elements next to template
+        NaNs (detector gaps) are NaN. alpha scales the shape so the noise
+        equals noise_level at depth_lam, or its median over depth_window
+        does.
 
         Args:
             lam (unyt_array): The wavelengths of the spectra.
-
-        Returns:
-            tuple: The lower template indices (np.ndarray of int) and the
-                weights (np.ndarray of float, 0 <= w <= 1).
-        """
-        template_lam = self.noise_shape_lam.to(lam.units).value
-        spec_lam = lam.value
-
-        # Warn if the spectra extend beyond the template
-        outside = (spec_lam < template_lam[0]) | (spec_lam > template_lam[-1])
-        if np.any(outside):
-            warn(
-                f"{self.label}: {outside.sum()} wavelength(s) fall outside "
-                "the noise template; using the nearest end of the template "
-                "there."
-            )
-
-        i_lo = np.clip(
-            np.searchsorted(template_lam, spec_lam, side="right") - 1,
-            0,
-            template_lam.size - 2,
-        )
-        w = np.clip(
-            (spec_lam - template_lam[i_lo])
-            / (template_lam[i_lo + 1] - template_lam[i_lo]),
-            0.0,
-            1.0,
-        )
-        return i_lo, w
-
-    @timed("SpectroscopicInstrument._get_noise_shape")
-    def _get_noise_shape(self, lam, units, weights):
-        """Return the 1-sigma noise of each wavelength element before scaling.
-
-        For "correlated" noise this is the noise the interpolated detector
-        noise has, sigma_j^2 = [(1 - w)^2 sigma_lo^2 + w^2 sigma_hi^2]
-        / [(1 - w)^2 + w^2]. For "independent" noise it is the template
-        linearly interpolated onto lam, or ones without a template (flat
-        noise). Wavelength elements next to template NaNs (detector gaps)
-        are NaN.
-
-        Args:
-            lam (unyt_array): The wavelengths of the spectra.
-            units (unyt.Unit): The units of the spectra.
-            weights (tuple or None): The template indices and weights from
-                _get_noise_interp_weights, or None without a template.
-
-        Returns:
-            np.ndarray: The noise shape on lam, in units.
-        """
-        # Without a template the noise is flat
-        if self.noise_shape_std is None:
-            return np.ones(lam.size)
-
-        template_std = self.noise_shape_std.to(units).value
-        i_lo, w = weights
-
-        # Only include template values with non-zero weight, so a NaN next to
-        # a gap doesn't spread to elements that don't use it
-        if self._correlated_noise:
-            a, b = (1 - w) ** 2, w**2
-            lo = np.where(a > 0, a * template_std[i_lo] ** 2, 0.0)
-            hi = np.where(b > 0, b * template_std[i_lo + 1] ** 2, 0.0)
-            return np.sqrt((lo + hi) / (a + b))
-
-        lo = np.where(w < 1, (1 - w) * template_std[i_lo], 0.0)
-        hi = np.where(w > 0, w * template_std[i_lo + 1], 0.0)
-        return lo + hi
-
-    @timed("SpectroscopicInstrument._get_noise_alpha")
-    def _get_noise_alpha(self, lam, shape, units, noise_level):
-        """Return the factor scaling the noise shape to the noise level.
-
-        The scaled noise equals noise_level at depth_lam, or its median
-        over depth_window does. Flat noise needs no reference.
-
-        Args:
-            lam (unyt_array): The wavelengths of the spectra.
-            shape (np.ndarray): The noise shape on lam, from
-                _get_noise_shape.
             units (unyt.Unit): The units of the spectra.
             noise_level (unyt_quantity): The target 1-sigma noise.
 
         Returns:
-            float: The scale factor alpha.
+            tuple: The 1-sigma noise of each element (np.ndarray, in units),
+                alpha (float), and the template indices and weights
+                (i_lo, w) interpolating it onto lam (None without a
+                template).
 
         Raises:
             InconsistentArguments: If the reference is outside the spectra,
@@ -962,7 +806,57 @@ class SpectroscopicInstrument(InstrumentBase):
         """
         spec_lam = lam.value
 
-        # Get the shape at the reference
+        # Without a template the noise is flat
+        if self.noise_shape_std is None:
+            shape = np.ones(lam.size)
+            weights = None
+
+        else:
+            template_lam = self.noise_shape_lam.to(lam.units).value
+            template_std = self.noise_shape_std.to(units).value
+
+            # Warn if the spectra extend beyond the template
+            outside = (spec_lam < template_lam[0]) | (
+                spec_lam > template_lam[-1]
+            )
+            if np.any(outside):
+                warn(
+                    f"{self.label}: {outside.sum()} wavelength(s) fall "
+                    "outside the noise template; using the nearest end of "
+                    "the template there."
+                )
+
+            # Get the template pixels either side of each wavelength element
+            # and the interpolation weights: element j is
+            # (1 - w[j]) * template[i_lo[j]] + w[j] * template[i_lo[j] + 1],
+            # and elements outside the template use its nearest end
+            i_lo = np.clip(
+                np.searchsorted(template_lam, spec_lam, side="right") - 1,
+                0,
+                template_lam.size - 2,
+            )
+            w = np.clip(
+                (spec_lam - template_lam[i_lo])
+                / (template_lam[i_lo + 1] - template_lam[i_lo]),
+                0.0,
+                1.0,
+            )
+            weights = (i_lo, w)
+
+            # Interpolate the template, only including template values with
+            # non-zero weight, so a NaN next to a gap doesn't spread to
+            # elements that don't use it
+            if self.template_on_detector:
+                a, b = (1 - w) ** 2, w**2
+                lo = np.where(a > 0, a * template_std[i_lo] ** 2, 0.0)
+                hi = np.where(b > 0, b * template_std[i_lo + 1] ** 2, 0.0)
+                shape = np.sqrt((lo + hi) / (a + b))
+            else:
+                lo = np.where(w < 1, (1 - w) * template_std[i_lo], 0.0)
+                hi = np.where(w > 0, w * template_std[i_lo + 1], 0.0)
+                shape = lo + hi
+
+        # Get the shape at the reference (flat noise needs none)
         if self.depth_window is not None:
             lam_min, lam_max = self.depth_window.to(lam.units).value
             in_window = (spec_lam >= lam_min) & (spec_lam <= lam_max)
@@ -983,13 +877,14 @@ class SpectroscopicInstrument(InstrumentBase):
         else:
             shape_ref = 1.0
 
-        alpha = noise_level.to(units).value / shape_ref
+        # Scale the shape to the noise level
+        alpha = float(noise_level.to(units).value / shape_ref)
         if not (np.isfinite(alpha) and alpha > 0):
             raise exceptions.InconsistentArguments(
                 f"{self.label}: noise scale factor is {alpha}; check the "
                 "depth, SNR, noise template and reference."
             )
-        return float(alpha)
+        return alpha * shape, alpha, weights
 
     @timed("SpectroscopicInstrument._generate_noise")
     def _generate_noise(
@@ -998,10 +893,10 @@ class SpectroscopicInstrument(InstrumentBase):
         lam,
         units,
         rng,
-        resolution=None,
+        noise_level=None,
         simspin_snr=None,
     ):
-        """Generate noise for some spectra.
+        """Generate noise for some spectra, and its weight map.
 
         The noise machinery here works on arrays whose last axis is wavelength,
         so it serves single spectra and spectral cubes. Two noise models are
@@ -1020,8 +915,9 @@ class SpectroscopicInstrument(InstrumentBase):
         over spectra with F > 0. The median spectrum then has S/N = snr at
         every wavelength.
 
-        SimSpin noise is used if simspin_snr is given, otherwise the
-        instrument's depth+SNR noise. Any leading axes of arr hold
+        As for imaging, the noise comes from SimSpin if simspin_snr is given,
+        otherwise from the instrument's noise maps (a fixed realisation added
+        as it is), or its depth and SNR. Any leading axes of arr hold
         independent spectra (e.g. the pixels of a spectral cube), each
         getting its own realisation.
 
@@ -1030,15 +926,37 @@ class SpectroscopicInstrument(InstrumentBase):
             lam (unyt_array): The wavelengths of the spectra.
             units (unyt.Unit): The units of the spectra.
             rng (np.random.Generator): The random number generator.
-            resolution (unyt_quantity, optional): The pixel size of a
-                spectral cube, for aperture depths.
+            noise_level (unyt_quantity, optional): The target 1-sigma
+                depth+SNR noise, depth / snrs (per pixel for spectral
+                cubes).
             simspin_snr (float, optional): The S/N of the median spectrum
                 for SimSpin noise.
 
         Returns:
-            tuple: The noise and the 1-sigma noise (np.ndarray, in units),
-                each shaped like arr. The 1-sigma noise is NaN where arr is.
+            tuple: The noise (np.ndarray, in units, shaped like arr, or like
+                the noise maps if they are used) and the weight map
+                (np.ndarray shaped like arr).
+
+        Raises:
+            MissingArgument: If there is no noise model to apply.
+            InconsistentArguments: If simspin_snr is not positive, or the
+                noise maps don't match the spectra.
         """
+        # SimSpin noise needs only its S/N
+        if simspin_snr is not None:
+            if not simspin_snr > 0:
+                raise exceptions.InconsistentArguments(
+                    "simspin_snr must be positive."
+                )
+        # Otherwise the instrument must define noise maps or depth+SNR noise
+        elif self.noise_maps is None and (
+            self.depth is None or self.snrs is None
+        ):
+            raise exceptions.MissingArgument(
+                "The instrument has no spectroscopic noise configuration. "
+                "Provide depth and snrs or noise_maps, or pass simspin_snr."
+            )
+
         if simspin_snr is not None:
             # Sum each spectrum over wavelength and take the median of the
             # spectra with flux
@@ -1060,21 +978,27 @@ class SpectroscopicInstrument(InstrumentBase):
             err = np.abs(arr) * scale[..., None]
             noise = rng.standard_normal(arr.shape) * err
 
-        else:
-            # Get the template interpolation weights once (they are reused
-            # by the correlated draw below)
-            weights = None
-            if self.noise_shape_std is not None:
-                weights = self._get_noise_interp_weights(lam)
+        elif self.noise_maps is not None:
+            # The fixed noise must match the trailing axes of the spectra:
+            # (nlam,) for spectra, or the whole cube for a spectral cube
+            ndim = self.noise_maps.ndim
+            if ndim > arr.ndim or self.noise_maps.shape != arr.shape[-ndim:]:
+                raise exceptions.InconsistentArguments(
+                    f"{self.label}: noise_maps has shape "
+                    f"{self.noise_maps.shape}, which doesn't match the "
+                    f"spectra's shape {arr.shape}."
+                )
+            noise = self.noise_maps.to(units).value
 
+            # As for imaging, the weight map comes from the noise's std
+            err = np.full(arr.shape, np.std(noise))
+
+        else:
             # Get the 1-sigma noise of each wavelength element
-            shape = self._get_noise_shape(lam, units, weights)
-            noise_level = self._get_noise_level(resolution)
-            alpha = self._get_noise_alpha(lam, shape, units, noise_level)
-            err = alpha * shape
+            err, alpha, weights = self._get_noise_std(lam, units, noise_level)
             err = np.broadcast_to(err, arr.shape).copy()
 
-            if not self._correlated_noise:
+            if weights is None or not self.template_on_detector:
                 noise = rng.standard_normal(arr.shape) * err
 
             else:
@@ -1113,7 +1037,13 @@ class SpectroscopicInstrument(InstrumentBase):
                 noise = noise.reshape(arr.shape)
 
         err[np.isnan(arr)] = np.nan
-        return noise, err
+
+        # Weight map is 1 / err**2, with 0 where err is NaN and inf where
+        # it is 0 (e.g. spectra without flux under SimSpin noise).
+        with np.errstate(divide="ignore", invalid="ignore"):
+            weight_map = np.where(np.isnan(err), 0.0, 1.0 / err**2)
+
+        return noise, weight_map
 
     @timed("SpectroscopicInstrument.apply_noise")
     def apply_noise(self, sed, rng_seed=None, simspin_snr=None):
@@ -1148,16 +1078,25 @@ class SpectroscopicInstrument(InstrumentBase):
             InconsistentArguments: If the noise units are neither fnu nor
                 lnu, or the noise maps don't match the wavelengths.
         """
-        self._check_noise_configuration(simspin_snr=simspin_snr)
-
-        # Choose the spectrum to add noise to from the noise units
-        if simspin_snr is not None:
+        # Choose the spectrum to add noise to: the one sharing the units of
+        # the noise maps or depth, or for SimSpin noise the fluxes if there
+        # are any (without any noise model, _generate_noise raises below)
+        noise_def = (
+            self.noise_maps if self.noise_maps is not None else self.depth
+        )
+        if simspin_snr is not None or noise_def is None:
             quantity = "lnu" if sed.fnu is None else "fnu"
         else:
-            noise_def = (
-                self.noise_maps if self.noise_maps is not None else self.depth
-            )
-            quantity = self._get_noise_quantity(sed, noise_def.units)
+            for quantity in ("fnu", "lnu"):
+                quantity_units = get_quantity_unit(sed, quantity)
+                if noise_def.units.dimensions == quantity_units.dimensions:
+                    break
+            else:
+                raise exceptions.InconsistentArguments(
+                    f"{self.label}: the noise units {noise_def.units} are "
+                    "neither a flux density (fnu) nor a luminosity density "
+                    "(lnu) per unit frequency."
+                )
         if quantity == "fnu" and sed.fnu is None:
             raise exceptions.MissingSpectraType(
                 "The noise is a flux density, so noisy spectroscopy needs "
@@ -1167,24 +1106,18 @@ class SpectroscopicInstrument(InstrumentBase):
         spectra = getattr(sed, f"_{quantity}")
         lam = sed.obslam if quantity == "fnu" else sed.lam
 
-        # Get the noise, either the fixed noise maps or a new realisation
-        if simspin_snr is None and self.noise_maps is not None:
-            if self.noise_maps.shape != (spectra.shape[-1],):
-                raise exceptions.InconsistentArguments(
-                    f"{self.label}: noise_maps must have one value per "
-                    f"wavelength ({spectra.shape[-1]}), not shape "
-                    f"{self.noise_maps.shape}."
-                )
-            noise = self.noise_maps.to(units).value
-
-            # As for imaging, the weight map comes from the noise's std
-            err = np.full(spectra.shape, np.std(noise))
-            err[np.isnan(spectra)] = np.nan
-        else:
-            rng = np.random.default_rng(rng_seed)
-            noise, err = self._generate_noise(
-                spectra, lam, units, rng, simspin_snr=simspin_snr
-            )
+        # Generate the noise, with the noise level the depth defines for a
+        # point source
+        noise_level = None if self.depth is None else self.depth / self.snrs
+        rng = np.random.default_rng(rng_seed)
+        noise, weight_map = self._generate_noise(
+            spectra,
+            lam,
+            units,
+            rng,
+            noise_level=noise_level,
+            simspin_snr=simspin_snr,
+        )
 
         # Build the new SED as apply_lsf does in each frame
         if quantity == "fnu":
@@ -1205,11 +1138,7 @@ class SpectroscopicInstrument(InstrumentBase):
 
         # Store the noise and the weight map on the new SED
         new_sed.noise_arr = unyt_array(noise, units)
-
-        # Weight map is 1 / err**2, with 0 where err is NaN and inf where
-        # it is 0 (e.g. spectra without flux under SimSpin noise).
-        with np.errstate(divide="ignore", invalid="ignore"):
-            new_sed.weight_map = np.where(np.isnan(err), 0.0, 1.0 / err**2)
+        new_sed.weight_map = weight_map
 
         return new_sed
 
