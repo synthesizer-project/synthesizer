@@ -914,11 +914,11 @@ class SpectroscopicInstrument(InstrumentBase):
         over spectra with F > 0. The median spectrum then has S/N = snr at
         every wavelength.
 
-        As for imaging, the noise comes from SimSpin if simspin_snr is given,
-        otherwise from the instrument's noise maps (a fixed realisation added
-        as it is), or its depth and SNR. Any leading axes of arr hold
-        independent spectra (e.g. the pixels of a spectral cube), each
-        getting its own realisation.
+        The noise follows the SimSpin calculation if simspin_snr is given,
+        otherwise from the provided noise maps (a fixed realisation added
+        as it is), or calculated from the depth and SNR. Any leading axes
+        of arr hold independent spectra (e.g. the pixels of a spectral cube),
+        each getting its own realisation.
 
         Args:
             arr (np.ndarray): The spectra, with shape (..., nlam), in units.
@@ -1051,13 +1051,13 @@ class SpectroscopicInstrument(InstrumentBase):
     def apply_noise(self, sed, rng_seed=None, simspin_snr=None):
         """Apply spectroscopic noise to an SED.
 
-        As for imaging, the noise comes from SimSpin if simspin_snr is given,
-        otherwise from the instrument's noise maps (added as they are), or
-        its depth and SNR. The noise is added to the observer frame fluxes
-        if the depth (or noise maps) is a flux density, or to the rest frame
-        luminosities if it is a luminosity density; SimSpin noise is added
-        to the fluxes if the SED has them. The other spectrum is carried
-        over without noise.
+        The noise follows the SimSpin calculation if simspin_snr is given,
+        otherwise from the provided noise maps (a fixed realisation added
+        as it is), or calculated from the depth and SNR. The noise is added
+        to the observer frame fluxes if the depth (or noise maps) is a flux
+        density, or to the rest frame luminosities if it is a luminosity
+        density; SimSpin noise is added to the fluxes if the SED has them.
+        The other spectrum is carried over without noise.
 
         Args:
             sed (Sed): The SED to add noise to, e.g. from apply_lam_array_fnu

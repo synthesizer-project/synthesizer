@@ -719,13 +719,13 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
     ):
         """Apply IFU noise to a spectral cube.
 
-        As for imaging, the noise comes from SimSpin if simspin_snr is given,
-        otherwise from the instrument's noise maps (a fixed noise cube added
-        as it is), or its depth and SNR. For depth+SNR and SimSpin noise each
-        spatial pixel is an independent spectrum, with noise from the noise
-        models of SpectroscopicInstrument. For depth+SNR noise with
-        depth_app_radius set, the depth is an aperture depth and the noise
-        is converted to per pixel, as for imaging.
+        The noise follows the SimSpin calculation if simspin_snr is given,
+        otherwise from the provided noise maps (a fixed realisation added
+        as it is), or calculated from the depth and SNR. For depth+SNR and
+        SimSpin noise each spatial pixel is an independent spectrum, with
+        noise from the noise models of SpectroscopicInstrument. For
+        depth+SNR noise with depth_app_radius set, the depth is an aperture
+        depth and the noise is converted to per pixel.
 
         Args:
             cube (SpectralCube): Spectral cube to which noise should be
@@ -770,9 +770,9 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             )
         units = getattr(cube.units, "units", cube.units)
 
-        # Get the noise level per pixel from the depth. As for imaging, an
-        # aperture depth is the noise in the aperture, so it is converted to
-        # per pixel, sigma_pix = sigma_ap / sqrt(N_pix) with
+        # Get the noise level per pixel from the depth. An aperture depth is
+        # the noise in the aperture, so it is converted to per pixel,
+        # sigma_pix = sigma_ap / sqrt(N_pix) with
         # N_pix = pi r^2 / resolution^2 (assuming independent pixels)
         noise_level = None
         if self.depth is not None:
