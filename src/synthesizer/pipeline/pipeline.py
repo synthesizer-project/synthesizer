@@ -374,6 +374,16 @@ class Pipeline:
         self.fnu_data_cubes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.spectroscopy_lnu = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.spectroscopy_fnu = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.spectroscopy_lsf_lnu = {
+            "Galaxy": {},
+            "Stars": {},
+            "BlackHole": {},
+        }
+        self.spectroscopy_lsf_fnu = {
+            "Galaxy": {},
+            "Stars": {},
+            "BlackHole": {},
+        }
 
         # We'll need to store the timing information to be reported at the
         # end of the pipeline (this will be stored with the operation
@@ -769,6 +779,8 @@ class Pipeline:
             self.fnu_data_cubes,
             self.spectroscopy_lnu,
             self.spectroscopy_fnu,
+            self.spectroscopy_lsf_lnu,
+            self.spectroscopy_lsf_fnu,
         ]
 
         return get_full_memory(results) / (1024**2)
@@ -4536,6 +4548,14 @@ class Pipeline:
                             inst_label, {}
                         ).setdefault(spec_type, []).append(spec.lnu)
 
+                # Unpack the spectroscopy with an LSF applied into its own
+                # dictionary (as for the PSF images)
+                for inst_label, d in owner.spectroscopy_lsf_lnu.items():
+                    for spec_type, spec in d.items():
+                        self.spectroscopy_lsf_lnu[key].setdefault(
+                            inst_label, {}
+                        ).setdefault(spec_type, []).append(spec.lnu)
+
         # Do we need to unpack the observer frame spectroscopy?
         if self._write_spectroscopy_fnu:
             for key, owner in (
@@ -4548,6 +4568,14 @@ class Pipeline:
                 for inst_label, d in owner.spectroscopy_fnu.items():
                     for spec_type, spec in d.items():
                         self.spectroscopy_fnu[key].setdefault(
+                            inst_label, {}
+                        ).setdefault(spec_type, []).append(spec.fnu)
+
+                # Unpack the spectroscopy with an LSF applied into its own
+                # dictionary (as for the PSF images)
+                for inst_label, d in owner.spectroscopy_lsf_fnu.items():
+                    for spec_type, spec in d.items():
+                        self.spectroscopy_lsf_fnu[key].setdefault(
                             inst_label, {}
                         ).setdefault(spec_type, []).append(spec.fnu)
 
@@ -5174,6 +5202,8 @@ class Pipeline:
         for products in (
             self.spectroscopy_lnu,
             self.spectroscopy_fnu,
+            self.spectroscopy_lsf_lnu,
+            self.spectroscopy_lsf_fnu,
             self.lnu_data_cubes,
             self.fnu_data_cubes,
         ):
@@ -5796,6 +5826,25 @@ class Pipeline:
                 galaxy_indices,
             )
 
+            # Write rest frame spectroscopy with an LSF applied (there is
+            # nothing to write unless an instrument has an LSF)
+            self.io_helper.write_data(
+                self.spectroscopy_lsf_lnu["Galaxy"],
+                "Galaxies/LSFSpectroscopy/SpectralLuminosityDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.spectroscopy_lsf_lnu["Stars"],
+                "Galaxies/Stars/LSFSpectroscopy/SpectralLuminosityDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.spectroscopy_lsf_lnu["BlackHole"],
+                "Galaxies/BlackHoles/LSFSpectroscopy/"
+                "SpectralLuminosityDensities",
+                galaxy_indices,
+            )
+
         # Write observer frame spectroscopy
         if self._write_spectroscopy_fnu:
             self.io_helper.write_data(
@@ -5811,6 +5860,24 @@ class Pipeline:
             self.io_helper.write_data(
                 self.spectroscopy_fnu["BlackHole"],
                 "Galaxies/BlackHoles/Spectroscopy/SpectralFluxDensities",
+                galaxy_indices,
+            )
+
+            # Write observer frame spectroscopy with an LSF applied (there is
+            # nothing to write unless an instrument has an LSF)
+            self.io_helper.write_data(
+                self.spectroscopy_lsf_fnu["Galaxy"],
+                "Galaxies/LSFSpectroscopy/SpectralFluxDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.spectroscopy_lsf_fnu["Stars"],
+                "Galaxies/Stars/LSFSpectroscopy/SpectralFluxDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.spectroscopy_lsf_fnu["BlackHole"],
+                "Galaxies/BlackHoles/LSFSpectroscopy/SpectralFluxDensities",
                 galaxy_indices,
             )
 

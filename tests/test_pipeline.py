@@ -1064,6 +1064,49 @@ class TestPipelineOperations:
                 for spec_type in group:
                     assert group[spec_type].shape == (ngal, inst.lam.size)
 
+    def test_pipeline_writes_lsf_spectroscopy(
+        self, pipeline_with_galaxies, tmp_path
+    ):
+        """Test the pipeline writes spectroscopy with an LSF applied.
+
+        It should be written next to the spectroscopy without the LSF, only
+        for instruments that have an LSF.
+        """
+        # Request both kinds of spectroscopy for an instrument with an LSF
+        # and one without
+        lam = np.linspace(4000.0, 8000.0, 100) * angstrom
+        instruments = (
+            SpectroscopicInstrument(
+                "lsf", lam=lam, lsfs=np.tile([0.25, 0.5, 0.25], (100, 1))
+            ),
+            SpectroscopicInstrument("plain", lam=lam),
+        )
+        ngal = len(pipeline_with_galaxies.galaxies)
+        for inst in instruments:
+            pipeline_with_galaxies.get_spectroscopy_lnu(inst)
+            pipeline_with_galaxies.get_spectroscopy_fnu(inst, cosmo=cosmo)
+        pipeline_with_galaxies.run()
+        output = tmp_path / "spectroscopy.hdf5"
+        pipeline_with_galaxies.write(output)
+
+        # Both instruments have spectroscopy without the LSF. Only the one
+        # with an LSF has spectroscopy with it: one spectrum per galaxy per
+        # type, differing from the spectrum without
+        with h5py.File(output) as hdf:
+            for name in (
+                "SpectralLuminosityDensities",
+                "SpectralFluxDensities",
+            ):
+                plain = hdf[f"Galaxies/Stars/Spectroscopy/{name}"]
+                group = hdf[f"Galaxies/Stars/LSFSpectroscopy/{name}"]
+                assert set(plain) == {"lsf", "plain"}
+                assert set(group) == {"lsf"}
+                assert len(group["lsf"]) > 0
+                for spec_type in group["lsf"]:
+                    spec = group["lsf"][spec_type][...]
+                    assert spec.shape == (ngal, lam.size)
+                    assert not np.allclose(spec, plain["lsf"][spec_type])
+
     def test_pipeline_writes_data_cubes(
         self,
         pipeline_with_galaxies_per_particle,
@@ -2958,6 +3001,36 @@ class TestGalaxySplitting:
         )
         pipeline.add_galaxies(galaxies)
         return pipeline
+
+    def test_split_matches_unsplit_lsf_spectroscopy(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+    ):
+        """Spectroscopy with an LSF should be chunk-invariant."""
+        split_threshold = max(2, random_particle_galaxy.stars.nparticles // 4)
+        instrument = SpectroscopicInstrument(
+            "lsf",
+            lam=np.linspace(4000.0, 8000.0, 100) * angstrom,
+            lsfs=np.tile([0.25, 0.5, 0.25], (100, 1)),
+        )
+
+        # Run the same galaxy whole and in chunks
+        results = []
+        for max_npart in (None, split_threshold):
+            pipeline = self._make_pipeline(
+                copy.deepcopy(nebular_emission_model),
+                [copy.deepcopy(random_particle_galaxy)],
+                max_npart=max_npart,
+            )
+            pipeline.get_spectroscopy_fnu(instrument, cosmo=cosmo)
+            pipeline.run()
+            results.append(pipeline.spectroscopy_lsf_fnu["Stars"]["lsf"])
+
+        # The chunks add up to the spectroscopy of the whole galaxy
+        assert len(results[0]) > 0
+        for spec_type, spec in results[0].items():
+            np.testing.assert_allclose(results[1][spec_type], spec, rtol=1e-5)
 
     def test_split_matches_unsplit_integrated_outputs(
         self,
