@@ -3,6 +3,9 @@
 This instrument is designed to hold the attributes required by resolved
 spectroscopy. It extends :class:`SpectroscopicInstrument` with spatial
 resolution, optional PSFs, and noise definitions.
+
+Cube noise uses the noise models of :class:`SpectroscopicInstrument`, with
+each spatial pixel of the cube an independent spectrum.
 """
 
 import h5py
@@ -17,6 +20,7 @@ from synthesizer.imaging.image_generators import _standardize_imaging_units
 from synthesizer.instruments.instrument_base import _hashable_state
 from synthesizer.instruments.spectroscopic_instrument import (
     SpectroscopicInstrument,
+    _get_weight_map,
 )
 from synthesizer.instruments.utils import (
     read_instrument_attribute,
@@ -48,6 +52,9 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             with shape (nwave, nkernel), inherited from
             SpectroscopicInstrument. Each row corresponds to a
             wavelength in lam.
+        noise_template_lam, noise_template_std, template_on_detector,
+        noise_lam_ref, noise_window, simspin_snr: The noise settings,
+            inherited from SpectroscopicInstrument.
     """
 
     @accepts(
@@ -56,6 +63,9 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         psf_lam=angstrom,
         lam=angstrom,
         depth_app_radius=(kpc, arcsecond),
+        noise_template_lam=angstrom,
+        noise_lam_ref=angstrom,
+        noise_window=angstrom,
     )
     @timed("IntegratedFieldUnit.__init__")
     def __init__(
@@ -73,6 +83,12 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         resolving_power=None,
         lsfs=None,
         psf_lam=None,
+        noise_template_lam=None,
+        noise_template_std=None,
+        template_on_detector=True,
+        noise_lam_ref=None,
+        noise_window=None,
+        simspin_snr=None,
     ):
         """Initialise an integrated field unit instrument.
 
@@ -115,6 +131,25 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             lsfs (array, optional): Normalised line spread function
                 kernels with shape (nwave, nkernel), sampled on the
                 instrument wavelength grid.
+            noise_template_lam (unyt_array, optional): Wavelengths of the
+                noise template, strictly increasing. Requires depth and snrs.
+            noise_template_std (unyt_array, optional): The noise template,
+                the 1-sigma noise per pixel at noise_template_lam (NaN in
+                detector gaps), in units convertible to the cube units. Only
+                its shape is used. Without a template the noise is flat.
+            template_on_detector (bool): Whether noise_template_lam are the
+                detector pixel centres, giving correlated "interpolated"
+                noise. If False each wavelength element gets independent
+                noise.
+            noise_lam_ref (unyt_quantity, optional): The wavelength at which
+                the noise per pixel equals depth / snrs (per pixel for an
+                aperture depth).
+            noise_window (unyt_array, optional): A wavelength window
+                (lam_min, lam_max) over whose median the noise equals
+                depth / snrs. With a template, give exactly one of this or
+                noise_lam_ref.
+            simspin_snr (float, optional): The S/N of the median-flux pixel
+                for SimSpin noise. An alternative to depth and snrs.
         """
         # Initialise the shared spectroscopic instrument first
         super().__init__(
@@ -126,6 +161,12 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             noise_maps=noise_maps,
             resolving_power=resolving_power,
             lsfs=lsfs,
+            noise_template_lam=noise_template_lam,
+            noise_template_std=noise_template_std,
+            template_on_detector=template_on_detector,
+            noise_lam_ref=noise_lam_ref,
+            noise_window=noise_window,
+            simspin_snr=simspin_snr,
         )
 
         # Attach the IFU specific attributes
@@ -264,13 +305,18 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                 )
 
         # Correlated-noise source maps are an alternative future noise
-        # definition to depth+SNR pairs.
+        # definition to depth+SNR pairs and SimSpin noise.
         if (
             self.depth is not None or self.snrs is not None
         ) and self.noise_source_maps is not None:
             raise exceptions.MissingArgument(
                 "You cannot set depths and SNRs at the same time as "
                 "noise source maps"
+            )
+        if self.simspin_snr is not None and self.noise_source_maps is not None:
+            raise exceptions.InconsistentArguments(
+                "You cannot set simspin_snr at the same time as noise source "
+                "maps"
             )
 
         # Fixed noise maps and source-noise templates are mutually exclusive.
@@ -298,7 +344,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
     @property
     def can_do_noisy_resolved_spectroscopy(self):
         """Return whether this instrument supports noisy IFU work."""
-        return False
+        return self.noise_method is not None
 
     @timed("IntegratedFieldUnit._comparison_state")
     def _comparison_state(self):
@@ -666,50 +712,118 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             "IntegratedFieldUnit.apply_psf only supports SpectralCube objects."
         )
 
-    @timed("IntegratedFieldUnit.apply_noise_to_cube")
-    def apply_noise_to_cube(self, cube, **kwargs):
-        """Apply IFU noise to a spectral cube.
+    @timed("IntegratedFieldUnit._check_noise_configuration")
+    def _check_noise_configuration(self):
+        """Ensure the instrument has a noise model that can be applied.
 
-        This placeholder makes the intended IFU-owned noise behaviour explicit
-        even though the underlying cube-noise machinery has not yet been
-        implemented.
+        Raises:
+            UnimplementedFunctionality: If noise source maps or fixed noise
+                maps are set.
+            MissingArgument: If the instrument has no noise configuration.
+        """
+        if self.noise_source_maps is not None:
+            raise exceptions.UnimplementedFunctionality(
+                "Correlated noise from noise source maps is not implemented "
+                "yet for spectral cubes."
+            )
+        super()._check_noise_configuration()
+
+    @timed("IntegratedFieldUnit.apply_noise_to_cube")
+    def apply_noise_to_cube(self, cube, rng_seed=None, inplace=False):
+        """Apply the configured IFU noise to a spectral cube.
+
+        Each spatial pixel is an independent spectrum, with noise from the
+        noise model of SpectroscopicInstrument. For depth+SNR noise with
+        depth_app_radius set, the depth is an aperture depth and the noise
+        is converted to per pixel, as for imaging.
 
         Args:
             cube (SpectralCube): Spectral cube to which noise should be
                 applied.
-            **kwargs: Future keyword arguments for IFU noise application.
+            rng_seed (int, optional): Seed for the noise realisation. None
+                gives a fresh realisation.
+            inplace (bool): If ``True`` update ``cube`` directly and return
+                it. Otherwise return a new cube.
+
+        Returns:
+            SpectralCube: Cube with noise applied, with noise_arr (the noise
+                added, unyt_array) and weight_map (the inverse variance of
+                each voxel; 0 where it is undefined) attached.
 
         Raises:
-            UnimplementedFunctionality: Raised because IFU cube noise
-                application is not yet implemented.
+            MissingIFU: If the cube has not been generated.
+            MissingArgument: If the instrument has no noise configuration.
+            InconsistentArguments: If the cube has no units.
+            UnimplementedFunctionality: If noise source maps or fixed noise
+                maps are set.
         """
-        # The IFU should eventually own cube-side noise application, but the
-        # required machinery has not yet been implemented.
-        raise exceptions.UnimplementedFunctionality(
-            "IntegratedFieldUnit.apply_noise_to_cube is not implemented yet."
+        # Ensure the spectral cube has been generated
+        if cube.arr is None:
+            raise exceptions.MissingIFU(
+                "The spectral cube array hasn't been generated yet. Run "
+                "generate_data_cube_hist() or generate_data_cube_smoothed() "
+                "before applying noise."
+            )
+        self._check_noise_configuration()
+
+        # The noise is defined in physical units, so the cube needs them
+        if cube.units is None:
+            raise exceptions.InconsistentArguments(
+                "The spectral cube must have units to apply noise."
+            )
+        units = getattr(cube.units, "units", cube.units)
+
+        # Generate the noise, treating each pixel as a spectrum
+        rng = np.random.default_rng(rng_seed)
+        noise, err = self._generate_noise(
+            cube.arr,
+            cube.lam,
+            units,
+            rng,
+            resolution=cube.resolution,
         )
+
+        # Work on the original cube when requested, otherwise create a fresh
+        # container
+        if inplace:
+            working_cube = cube
+        else:
+            working_cube = SpectralCube(
+                resolution=cube.resolution,
+                fov=cube.fov,
+                lam=cube.lam,
+            )
+            working_cube.units = cube.units
+            working_cube.sed = cube.sed
+            working_cube.quantity = cube.quantity
+
+        # Add the noise and store it with the weight map
+        working_cube.arr = cube.arr + noise
+        working_cube.noise_arr = unyt_array(noise, units)
+        working_cube.weight_map = _get_weight_map(err)
+
+        return working_cube
 
     @timed("IntegratedFieldUnit.apply_noise")
     def apply_noise(self, observable, **kwargs):
         """Apply IFU noise to an observable.
 
-        This placeholder makes the intended IFU-owned noise behaviour explicit
-        even though the underlying resolved-spectroscopy noise machinery has
-        not yet been implemented.
-
         Args:
             observable: Observable to which IFU noise should be applied.
-            **kwargs: Future keyword arguments for IFU noise application.
+            **kwargs: Additional arguments passed to the noise method.
+
+        Returns:
+            SpectralCube: Cube with noise applied.
 
         Raises:
-            UnimplementedFunctionality: Raised because IFU noise application is
-                not yet implemented.
+            InconsistentArguments: If the observable is not a SpectralCube.
         """
-        # The IFU should eventually own resolved-spectroscopy noise
-        # application, but the required machinery has not yet been
-        # implemented.
-        raise exceptions.UnimplementedFunctionality(
-            "IntegratedFieldUnit.apply_noise is not implemented yet."
+        if isinstance(observable, SpectralCube):
+            return self.apply_noise_to_cube(observable, **kwargs)
+
+        raise exceptions.InconsistentArguments(
+            "IntegratedFieldUnit.apply_noise only supports SpectralCube "
+            "objects."
         )
 
     @timed("IntegratedFieldUnit.to_hdf5")
@@ -831,6 +945,20 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             "noise_maps": noise_maps,
             "noise_source_maps": noise_source_maps,
             "resolving_power": group.attrs.get("resolving_power"),
+            "noise_template_lam": read_instrument_attribute(
+                group, "NoiseTemplateWavelength"
+            ),
+            "noise_template_std": read_instrument_attribute(
+                group, "NoiseTemplateStd"
+            ),
+            "template_on_detector": bool(
+                group.attrs.get("template_on_detector", True)
+            ),
+            "noise_lam_ref": read_instrument_attribute(
+                group, "NoiseReferenceWavelength"
+            ),
+            "noise_window": read_instrument_attribute(group, "NoiseWindow"),
+            "simspin_snr": read_instrument_attribute(group, "SimSpinSNR"),
         }
         payload.update(kwargs)
 
@@ -848,4 +976,10 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             noise_maps=payload["noise_maps"],
             noise_source_maps=payload["noise_source_maps"],
             resolving_power=payload["resolving_power"],
+            noise_template_lam=payload["noise_template_lam"],
+            noise_template_std=payload["noise_template_std"],
+            template_on_detector=payload["template_on_detector"],
+            noise_lam_ref=payload["noise_lam_ref"],
+            noise_window=payload["noise_window"],
+            simspin_snr=payload["simspin_snr"],
         )
