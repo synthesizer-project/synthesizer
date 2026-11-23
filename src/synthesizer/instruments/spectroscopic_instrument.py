@@ -33,6 +33,7 @@ from synthesizer.units import (
     accepts,
     deepcopy_with_shared_units,
     get_quantity_unit,
+    unyt_to_ndview,
 )
 from synthesizer.utils.operation_timers import timed
 
@@ -283,6 +284,27 @@ class SpectroscopicInstrument(InstrumentBase):
                 "noise_maps must have units."
             )
 
+        # depth and snrs are validated independently here, so an invalid
+        # value is rejected at construction rather than surfacing later as
+        # an invalid derived noise scale
+        if self.depth is not None and (
+            np.ndim(self.depth) != 0
+            or not np.isfinite(self.depth.value)
+            or self.depth.value <= 0
+        ):
+            raise exceptions.InconsistentArguments(
+                "depth must be a positive, finite scalar."
+            )
+        if self.snrs is not None and (
+            isinstance(self.snrs, bool)
+            or not isinstance(self.snrs, Real)
+            or not np.isfinite(self.snrs)
+            or self.snrs <= 0
+        ):
+            raise exceptions.InconsistentArguments(
+                "snrs must be a positive, finite number."
+            )
+
         # The depth wavelength or window says where the depth applies
         if self.depth is None and (
             self.depth_lam is not None or self.depth_window is not None
@@ -322,9 +344,12 @@ class SpectroscopicInstrument(InstrumentBase):
                     "The noise template must be one-dimensional with at "
                     "least two wavelengths."
                 )
-            if np.any(np.diff(self.noise_shape_lam.value) <= 0):
+            if not np.all(np.isfinite(self.noise_shape_lam.value)) or np.any(
+                np.diff(self.noise_shape_lam.value) <= 0
+            ):
                 raise exceptions.InconsistentArguments(
-                    "noise_shape_lam must be strictly increasing."
+                    "noise_shape_lam must contain only finite, strictly "
+                    "increasing wavelengths."
                 )
 
             # A noise template needs a reference at which to scale it
@@ -456,13 +481,24 @@ class SpectroscopicInstrument(InstrumentBase):
         Returns:
             tuple: Hashable representation of the instrument state.
         """
-        # Keep every resolving-power grid coordinate. The generic numeric
-        # state helper intentionally uses a compact fingerprint, which can
-        # make grids with different interior wavelengths compare equal.
+        # Keep every resolving-power and noise-template grid coordinate.
+        # The generic numeric state helper intentionally uses a compact
+        # fingerprint, which can make grids with different interior
+        # wavelengths compare equal.
         resolving_power_lam_state = (
             None
             if self.resolving_power_lam is None
             else tuple(self.resolving_power_lam.to_value("angstrom"))
+        )
+        noise_shape_lam_state = (
+            None
+            if self.noise_shape_lam is None
+            else tuple(self.noise_shape_lam.to_value("angstrom"))
+        )
+        noise_shape_std_state = (
+            None
+            if self.noise_shape_std is None
+            else tuple(self.noise_shape_std.value)
         )
 
         return (
@@ -473,8 +509,8 @@ class SpectroscopicInstrument(InstrumentBase):
             _hashable_state(self.lsf_resample_factor),
             _hashable_state(self.depth),
             _hashable_state(self.snrs),
-            _hashable_state(self.noise_shape_lam),
-            _hashable_state(self.noise_shape_std),
+            noise_shape_lam_state,
+            noise_shape_std_state,
             _hashable_state(self.template_on_detector),
             _hashable_state(self.depth_lam),
             _hashable_state(self.depth_window),
@@ -827,35 +863,43 @@ class SpectroscopicInstrument(InstrumentBase):
                     "the template there."
                 )
 
-            # Get the template pixels either side of each wavelength element
-            # and the interpolation weights: element j is
-            # (1 - w[j]) * template[i_lo[j]] + w[j] * template[i_lo[j] + 1],
-            # and elements outside the template use its nearest end
-            i_lo = np.clip(
-                np.searchsorted(template_lam, spec_lam, side="right") - 1,
-                0,
-                template_lam.size - 2,
-            )
-            w = np.clip(
-                (spec_lam - template_lam[i_lo])
-                / (template_lam[i_lo + 1] - template_lam[i_lo]),
-                0.0,
-                1.0,
-            )
-            weights = (i_lo, w)
+            def template_shape(query_lam):
+                """Evaluate the template model at arbitrary wavelengths.
 
-            # Interpolate the template, only including template values with
-            # non-zero weight, so a NaN next to a gap doesn't spread to
-            # elements that don't use it
-            if self.template_on_detector:
-                a, b = (1 - w) ** 2, w**2
-                lo = np.where(a > 0, a * template_std[i_lo] ** 2, 0.0)
-                hi = np.where(b > 0, b * template_std[i_lo + 1] ** 2, 0.0)
-                shape = np.sqrt((lo + hi) / (a + b))
-            else:
+                Gets the template pixels either side of each element of
+                query_lam and the interpolation weights: element j is
+                (1 - w[j]) * template[i_lo[j]] + w[j] * template[i_lo[j]
+                + 1], and elements outside the template use its nearest
+                end. Only template values with non-zero weight are
+                included, so a NaN next to a gap doesn't spread to
+                elements that don't use it.
+
+                Returns:
+                    tuple: The shape (np.ndarray) and the template indices
+                        and weights (i_lo, w) interpolating onto
+                        query_lam.
+                """
+                i_lo = np.clip(
+                    np.searchsorted(template_lam, query_lam, side="right") - 1,
+                    0,
+                    template_lam.size - 2,
+                )
+                w = np.clip(
+                    (query_lam - template_lam[i_lo])
+                    / (template_lam[i_lo + 1] - template_lam[i_lo]),
+                    0.0,
+                    1.0,
+                )
+                if self.template_on_detector:
+                    a, b = (1 - w) ** 2, w**2
+                    lo = np.where(a > 0, a * template_std[i_lo] ** 2, 0.0)
+                    hi = np.where(b > 0, b * template_std[i_lo + 1] ** 2, 0.0)
+                    return np.sqrt((lo + hi) / (a + b)), (i_lo, w)
                 lo = np.where(w < 1, (1 - w) * template_std[i_lo], 0.0)
                 hi = np.where(w > 0, w * template_std[i_lo + 1], 0.0)
-                shape = lo + hi
+                return lo + hi, (i_lo, w)
+
+            shape, weights = template_shape(spec_lam)
 
             # Get the shape at the reference wavelength
             if self.depth_window is not None:
@@ -874,7 +918,11 @@ class SpectroscopicInstrument(InstrumentBase):
                         f"{self.label}: depth_lam {self.depth_lam} is "
                         "outside the spectra."
                     )
-                shape_ref = np.interp(lam_ref, spec_lam, shape)
+                # Evaluate the template model directly at lam_ref, rather
+                # than interpolating the per-channel shape a second time:
+                # this gives the same result the matching output channel
+                # would get, when lam_ref coincides with one.
+                shape_ref = template_shape(np.array([lam_ref]))[0][0]
 
         # Scale the shape to the noise level
         alpha = float(noise_level.to(units).value / shape_ref)
@@ -987,10 +1035,27 @@ class SpectroscopicInstrument(InstrumentBase):
                     f"{self.noise_maps.shape}, which doesn't match the "
                     f"spectra's shape {arr.shape}."
                 )
+
+            # noise_maps is defined on the instrument's own wavelength
+            # grid (self.lam), so the spectra's wavelengths must match it
+            # exactly, not just have a matching length
+            input_lam = unyt_to_ndview(lam, self.lam.units)
+            if not np.array_equal(input_lam, self.lam.ndview):
+                raise exceptions.InconsistentArguments(
+                    f"{self.label}: noise_maps is defined on the "
+                    "instrument's wavelength grid, which doesn't match "
+                    "the spectra's wavelengths."
+                )
+
             noise = self.noise_maps.to(units).value
 
-            # As for imaging, the weight map comes from the noise's std
-            err = np.full(arr.shape, np.std(noise))
+            # Weight map comes from the noise's std.
+            # Estimate the scale from unmasked (finite) channels only, and
+            # keep masked (NaN) channels masked in the weight map.
+            err = np.broadcast_to(
+                np.where(np.isnan(noise), np.nan, np.nanstd(noise)),
+                arr.shape,
+            ).copy()
 
         else:
             # Get the 1-sigma noise of each wavelength element
@@ -1003,20 +1068,23 @@ class SpectroscopicInstrument(InstrumentBase):
             else:
                 # Interpolation doesn't average detector pixels down, so
                 # wavelength elements coarser than the detector pixels would
-                # get too much noise
-                template_lam = self.noise_shape_lam.to(lam.units).value
-                ratio = np.interp(
-                    lam.value, template_lam, np.gradient(template_lam)
-                ) / np.gradient(lam.value)
-                coarse = ratio < 0.9
-                if np.any(coarse):
-                    warn(
-                        f"{self.label}: {coarse.sum()} of {lam.size} "
-                        "wavelength elements are coarser than the detector "
-                        f"pixels (ratio down to {ratio.min():.2f}, between "
-                        f"{lam[coarse].min()} and {lam[coarse].max()}); "
-                        "correlated noise does not average down there."
-                    )
+                # get too much noise. np.gradient needs at least two
+                # elements, so a single output channel skips the check.
+                if lam.size >= 2:
+                    template_lam = self.noise_shape_lam.to(lam.units).value
+                    ratio = np.interp(
+                        lam.value, template_lam, np.gradient(template_lam)
+                    ) / np.gradient(lam.value)
+                    coarse = ratio < 0.9
+                    if np.any(coarse):
+                        warn(
+                            f"{self.label}: {coarse.sum()} of {lam.size} "
+                            "wavelength elements are coarser than the "
+                            f"detector pixels (ratio down to "
+                            f"{ratio.min():.2f}, between "
+                            f"{lam[coarse].min()} and {lam[coarse].max()}); "
+                            "correlated noise does not average down there."
+                        )
 
                 # Draw independent noise at the detector pixels for each
                 # spectrum, in (detector pixel, spectrum) order
