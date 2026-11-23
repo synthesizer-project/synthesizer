@@ -4,25 +4,8 @@ This instrument is designed to hold the attributes required for one-
 dimensional spectroscopy. It stores a wavelength grid together with optional
 depth, signal-to-noise, and noise-map definitions.
 
-The noise machinery here works on arrays whose last axis is wavelength, so it
-serves single spectra, sets of spectra and spectral cubes alike (the
-IntegratedFieldUnit calls it for cubes). Two noise models are available:
-
-- Source independent: sigma(lambda) = alpha * shape(lambda). The shape is an
-  optional noise template (defaults to flat if not supplied), and
-  alpha scales it so sigma = depth / snr at a reference wavelength (or the
-  median over a reference window). If the template is sampled on the detector
-  pixels, noise is drawn there and linearly interpolated onto the spectrum's
-  wavelengths ("correlated"), so wavelength elements sharing detector pixels
-  are correlated. Otherwise each wavelength element gets independent noise
-  ("independent").
-- SimSpin: sigma(lambda) = |F(lambda)| sqrt(F_med) / (snr sqrt(F)), where F is
-  a spectrum summed over wavelength and F_med the median of F over spectra
-  with F > 0. The median spectrum then has S/N = snr at every wavelength.
-
-The instrument holds the noise level (depth and snrs) and shape. The
-reference wavelength or window, and the SimSpin S/N, are passed when the
-noise is applied.
+The instrument holds the noise level (depth and snrs) and shape as a function
+of wavelength.
 """
 
 from collections import OrderedDict
@@ -409,26 +392,17 @@ class SpectroscopicInstrument(InstrumentBase):
     @property
     def can_do_noisy_spectroscopy(self):
         """Return whether this instrument supports noisy spectroscopy."""
-        return self.noise_method is not None
+        return self.depth is not None and self.snrs is not None
 
     @property
-    def noise_method(self):
-        """Return the depth+SNR noise model the instrument's settings give.
+    def _correlated_noise(self):
+        """Return whether depth+SNR noise is correlated between elements.
 
-        SimSpin noise needs no instrument settings; it is chosen by passing
-        simspin_snr when the noise is applied.
-
-        Returns:
-            str or None: "correlated" if depth and SNRs are set with a noise
-                template on the detector pixels; "independent" if depth and
-                SNRs are set with a template on other wavelengths, or no
-                template (flat noise); otherwise None.
+        It is when the noise template is on the detector pixels; otherwise
+        (a template on other wavelengths, or flat noise) each wavelength
+        element gets independent noise.
         """
-        if self.depth is None or self.snrs is None:
-            return None
-        if self.noise_shape_std is not None and self.template_on_detector:
-            return "correlated"
-        return "independent"
+        return self.noise_shape_std is not None and self.template_on_detector
 
     @property
     def can_do_lsf_spectroscopy(self):
@@ -796,7 +770,7 @@ class SpectroscopicInstrument(InstrumentBase):
             return
 
         # Otherwise the instrument must define depth+SNR noise
-        if self.noise_method is None:
+        if self.depth is None or self.snrs is None:
             raise exceptions.MissingArgument(
                 "The instrument has no spectroscopic noise configuration. "
                 "Provide depth and snrs, or pass simspin_snr."
@@ -923,7 +897,7 @@ class SpectroscopicInstrument(InstrumentBase):
 
         # Only include template values with non-zero weight, so a NaN next to
         # a gap doesn't spread to elements that don't use it
-        if self.noise_method == "correlated":
+        if self._correlated_noise:
             a, b = (1 - w) ** 2, w**2
             lo = np.where(a > 0, a * template_std[i_lo] ** 2, 0.0)
             hi = np.where(b > 0, b * template_std[i_lo + 1] ** 2, 0.0)
@@ -1004,6 +978,23 @@ class SpectroscopicInstrument(InstrumentBase):
     ):
         """Generate noise for some spectra.
 
+        The noise machinery here works on arrays whose last axis is wavelength,
+        so it serves single spectra and spectral cubes. Two noise models are
+        available:
+
+        - Source independent: sigma(lambda) = alpha * shape(lambda). The shape
+        is an optional noise template (defaults to flat if not supplied), and
+        alpha scales it so sigma = depth / snr at a reference wavelength (or
+        the median over a reference window). If the template is sampled on the
+        detector pixels, noise is drawn there and linearly interpolated onto
+        the spectrum's wavelengths ("correlated"), so wavelength elements
+        sharing detector pixels are correlated. Otherwise each wavelength
+        element gets independent noise ("independent").
+        - SimSpin: sigma(lambda) = |F(lambda)| sqrt(F_med) / (snr sqrt(F)),
+        where F is a spectrum summed over wavelength and F_med the median of F
+        over spectra with F > 0. The median spectrum then has S/N = snr at
+        every wavelength.
+
         SimSpin noise is used if simspin_snr is given, otherwise the
         instrument's depth+SNR noise. Any leading axes of arr hold
         independent spectra (e.g. the pixels of a spectral cube), each
@@ -1061,7 +1052,7 @@ class SpectroscopicInstrument(InstrumentBase):
             err = alpha * self._get_noise_shape(lam, units)
             err = np.broadcast_to(err, arr.shape).copy()
 
-            if self.noise_method == "independent":
+            if not self._correlated_noise:
                 noise = rng.standard_normal(arr.shape) * err
 
             else:

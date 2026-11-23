@@ -320,7 +320,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
     @property
     def can_do_noisy_resolved_spectroscopy(self):
         """Return whether this instrument supports noisy IFU work."""
-        return self.noise_method is not None
+        return self.depth is not None and self.snrs is not None
 
     @timed("IntegratedFieldUnit._comparison_state")
     def _comparison_state(self):
