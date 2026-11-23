@@ -810,6 +810,7 @@ class SpectroscopicInstrument(InstrumentBase):
         if self.noise_shape_std is None:
             shape = np.ones(lam.size)
             weights = None
+            shape_ref = 1.0
 
         else:
             template_lam = self.noise_shape_lam.to(lam.units).value
@@ -856,26 +857,24 @@ class SpectroscopicInstrument(InstrumentBase):
                 hi = np.where(w > 0, w * template_std[i_lo + 1], 0.0)
                 shape = lo + hi
 
-        # Get the shape at the reference (flat noise needs none)
-        if self.depth_window is not None:
-            lam_min, lam_max = self.depth_window.to(lam.units).value
-            in_window = (spec_lam >= lam_min) & (spec_lam <= lam_max)
-            if not np.any(in_window):
-                raise exceptions.InconsistentArguments(
-                    f"{self.label}: no wavelengths inside depth_window "
-                    f"{self.depth_window}."
-                )
-            shape_ref = np.nanmedian(shape[in_window])
-        elif self.depth_lam is not None:
-            lam_ref = self.depth_lam.to(lam.units).value
-            if not spec_lam[0] <= lam_ref <= spec_lam[-1]:
-                raise exceptions.InconsistentArguments(
-                    f"{self.label}: depth_lam {self.depth_lam} is "
-                    "outside the spectra."
-                )
-            shape_ref = np.interp(lam_ref, spec_lam, shape)
-        else:
-            shape_ref = 1.0
+            # Get the shape at the reference wavelength
+            if self.depth_window is not None:
+                lam_min, lam_max = self.depth_window.to(lam.units).value
+                in_window = (spec_lam >= lam_min) & (spec_lam <= lam_max)
+                if not np.any(in_window):
+                    raise exceptions.InconsistentArguments(
+                        f"{self.label}: no wavelengths inside depth_window "
+                        f"{self.depth_window}."
+                    )
+                shape_ref = np.nanmedian(shape[in_window])
+            elif self.depth_lam is not None:
+                lam_ref = self.depth_lam.to(lam.units).value
+                if not spec_lam[0] <= lam_ref <= spec_lam[-1]:
+                    raise exceptions.InconsistentArguments(
+                        f"{self.label}: depth_lam {self.depth_lam} is "
+                        "outside the spectra."
+                    )
+                shape_ref = np.interp(lam_ref, spec_lam, shape)
 
         # Scale the shape to the noise level
         alpha = float(noise_level.to(units).value / shape_ref)
@@ -1002,18 +1001,21 @@ class SpectroscopicInstrument(InstrumentBase):
                 noise = rng.standard_normal(arr.shape) * err
 
             else:
-                # Interpolation doesn't average detector pixels down, so a
-                # coarser wavelength array would get too much noise
+                # Interpolation doesn't average detector pixels down, so
+                # wavelength elements coarser than the detector pixels would
+                # get too much noise
                 template_lam = self.noise_shape_lam.to(lam.units).value
                 ratio = np.interp(
                     lam.value, template_lam, np.gradient(template_lam)
                 ) / np.gradient(lam.value)
-                if np.median(ratio) < 0.9:
+                coarse = ratio < 0.9
+                if np.any(coarse):
                     warn(
-                        f"{self.label}: the wavelength elements are coarser "
-                        "than the detector pixels (median ratio "
-                        f"{np.median(ratio):.2f}); correlated noise does "
-                        "not average down."
+                        f"{self.label}: {coarse.sum()} of {lam.size} "
+                        "wavelength elements are coarser than the detector "
+                        f"pixels (ratio down to {ratio.min():.2f}, between "
+                        f"{lam[coarse].min()} and {lam[coarse].max()}); "
+                        "correlated noise does not average down there."
                     )
 
                 # Draw independent noise at the detector pixels for each
