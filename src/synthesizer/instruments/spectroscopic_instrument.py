@@ -48,15 +48,6 @@ class SpectroscopicInstrument(InstrumentBase):
     Attributes:
         lam (unyt_array): The wavelength array defining the spectral coverage
             of the instrument.
-        depth (unyt_quantity, optional): The depth of the instrument, the
-            spectral flux density (fnu) or luminosity density (lnu) reached
-            at S/N = snrs, at depth_lam (or over depth_window). Its units
-            set which of the fluxes or luminosities get noise.
-        snrs (float, optional): The signal-to-noise ratio at the depth.
-        noise_maps (unyt_array, optional): A fixed noise realisation added
-            to spectra as it is, with one value per wavelength in lam. An
-            alternative to depth and snrs; its units set which of the fluxes
-            or luminosities get noise.
         resolving_power (float or callable or array, optional): Resolving
             power (R = lambda / delta_lambda) of the instrument. May be a
             constant or a function of wavelength or an array as a function of
@@ -84,6 +75,17 @@ class SpectroscopicInstrument(InstrumentBase):
         lsf_resample_factor (int, optional): The LSF supersampling factor.
             The kernels are sampled, and applied, on wavelength bins this
             many times finer than the wavelength array.
+        depth (unyt_quantity, optional): The depth of the instrument, the
+            spectral flux density (fnu) or luminosity density (lnu) reached
+            at S/N = snrs, at depth_lam (or over depth_window). Its units
+            set which of the fluxes or luminosities get noise.
+        snrs (float, optional): The signal-to-noise ratio at the depth.
+        depth_lam (unyt_quantity, optional): The wavelength at which the
+            noise equals depth / snrs.
+        depth_window (unyt_array, optional): A wavelength window (lam_min,
+            lam_max) over whose median the noise equals depth / snrs. With a
+            noise template, exactly one of this or depth_lam is required;
+            flat noise needs neither.
         noise_shape_lam (unyt_array, optional): Wavelengths of the noise
             template noise_shape_std(noise_shape_lam), strictly increasing.
         noise_shape_std (unyt_array, optional): The noise template, the
@@ -93,12 +95,10 @@ class SpectroscopicInstrument(InstrumentBase):
             detector pixel centres. If so, noise is drawn at the detector
             pixels and interpolated, giving correlated wavelength elements;
             if not, each wavelength element gets independent noise.
-        depth_lam (unyt_quantity, optional): The wavelength at which the
-            noise equals depth / snrs.
-        depth_window (unyt_array, optional): A wavelength window (lam_min,
-            lam_max) over whose median the noise equals depth / snrs. With a
-            noise template, exactly one of this or depth_lam is required;
-            flat noise needs neither.
+        noise_maps (unyt_array, optional): A fixed noise realisation added
+            to spectra as it is, with one value per wavelength in lam. An
+            alternative to the inline calculation; its units set which of
+            the fluxes or luminosities get noise.
     """
 
     lam = Quantity("wavelength")
@@ -117,18 +117,18 @@ class SpectroscopicInstrument(InstrumentBase):
         self,
         label,
         lam,
-        depth=None,
-        snrs=None,
-        noise_maps=None,
         resolving_power=None,
         lsfs=None,
         resolving_power_lam=None,
         lsf_resample_factor=1,
+        depth=None,
+        snrs=None,
+        depth_lam=None,
+        depth_window=None,
         noise_shape_lam=None,
         noise_shape_std=None,
         template_on_detector=True,
-        depth_lam=None,
-        depth_window=None,
+        noise_maps=None,
     ):
         """Initialise a spectroscopic instrument.
 
@@ -136,14 +136,6 @@ class SpectroscopicInstrument(InstrumentBase):
             label (str): A label for the instrument.
             lam (unyt_array): The wavelength array defining the spectral
                 coverage of the instrument.
-            depth (unyt_quantity, optional): The depth of the instrument,
-                the spectral flux density (fnu) or luminosity density (lnu)
-                reached at S/N = snrs, at depth_lam (or over depth_window).
-                Its units set which of the fluxes or luminosities get noise.
-            snrs (float, optional): The signal-to-noise ratio at the depth.
-            noise_maps (unyt_array, optional): A fixed noise realisation
-                added to spectra as it is, with one value per wavelength in
-                lam. An alternative to depth and snrs.
             resolving_power (float or callable or array, optional): Resolving
                 power (R = lambda / delta_lambda) of the instrument.
                 May be a constant, array, or function of wavelength. Constants
@@ -161,6 +153,17 @@ class SpectroscopicInstrument(InstrumentBase):
             lsf_resample_factor (int, optional): The LSF supersampling
                 factor. The kernels are sampled, and applied, on wavelength
                 bins this many times finer than the wavelength array.
+            depth (unyt_quantity, optional): The depth of the instrument,
+                the spectral flux density (fnu) or luminosity density (lnu)
+                reached at S/N = snrs, at depth_lam (or over depth_window).
+                Its units set which of the fluxes or luminosities get noise.
+            snrs (float, optional): The signal-to-noise ratio at the depth.
+            depth_lam (unyt_quantity, optional): The wavelength at which the
+                noise equals depth / snrs.
+            depth_window (unyt_array, optional): A wavelength window
+                (lam_min, lam_max) over whose median the noise equals
+                depth / snrs. With a noise template, exactly one of this or
+                depth_lam is required; flat noise needs neither.
             noise_shape_lam (unyt_array, optional): Wavelengths of the
                 noise template, strictly increasing. Requires depth and snrs.
             noise_shape_std (unyt_array, optional): The noise template,
@@ -171,26 +174,23 @@ class SpectroscopicInstrument(InstrumentBase):
                 detector pixel centres. If True, allows correlated
                 noise to be calculated. If False each wavelength element gets
                 independent noise.
-            depth_lam (unyt_quantity, optional): The wavelength at which the
-                noise equals depth / snrs.
-            depth_window (unyt_array, optional): A wavelength window
-                (lam_min, lam_max) over whose median the noise equals
-                depth / snrs. With a noise template, exactly one of this or
-                depth_lam is required; flat noise needs neither.
+            noise_maps (unyt_array, optional): A fixed noise realisation
+                added to spectra as it is, with one value per wavelength in
+                lam. An alternative to the inline calculation.
         """
         super().__init__(label)
         self.lam = lam
-        self.depth = depth
-        self.snrs = snrs
-        self.noise_maps = noise_maps
         self.resolving_power = resolving_power
         self.resolving_power_lam = resolving_power_lam
         self.lsf_resample_factor = lsf_resample_factor
+        self.depth = depth
+        self.snrs = snrs
         self.noise_shape_lam = noise_shape_lam
         self.noise_shape_std = noise_shape_std
         self.template_on_detector = template_on_detector
         self.depth_lam = depth_lam
         self.depth_window = depth_window
+        self.noise_maps = noise_maps
 
         # Set the LSFs (this also validates the instrument)
         self.set_lsfs(lsfs)
@@ -472,18 +472,18 @@ class SpectroscopicInstrument(InstrumentBase):
 
         return (
             _hashable_state(self._lam),
-            _hashable_state(self.depth),
-            _hashable_state(self.snrs),
-            _hashable_state(self.noise_maps),
             _hashable_state(self.resolving_power),
             resolving_power_lam_state,
             _hashable_state(self.lsfs),
             _hashable_state(self.lsf_resample_factor),
+            _hashable_state(self.depth),
+            _hashable_state(self.snrs),
             _hashable_state(self.noise_shape_lam),
             _hashable_state(self.noise_shape_std),
             _hashable_state(self.template_on_detector),
             _hashable_state(self.depth_lam),
             _hashable_state(self.depth_window),
+            _hashable_state(self.noise_maps),
         )
 
     @timed("SpectroscopicInstrument.apply_lam_array_lnu")
