@@ -416,7 +416,8 @@ def load_CAMELS_Astrid(
         coods = hf["PartType4/Coordinates"][:]  # kpc (comoving)
         masses = hf["PartType4/Masses"][:]
 
-        imasses = np.ones(len(masses)) * 1.27e-4
+        # Not stored: each gas element (1.27e-3) spawns four star particles
+        imasses = np.ones(len(masses)) * 1.27e-3 / 4
 
         _metals = hf["PartType4/GFM_Metals"][:]
         metallicity = hf["PartType4/GFM_Metallicity"][:]
