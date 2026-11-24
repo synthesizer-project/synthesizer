@@ -497,7 +497,10 @@ class SpectroscopicInstrument(InstrumentBase):
         noise_shape_std_state = (
             None
             if self.noise_shape_std is None
-            else tuple(self.noise_shape_std.value)
+            else tuple(
+                None if np.isnan(x) else float(x)
+                for x in self.noise_shape_std.value
+            )
         )
 
         return (
