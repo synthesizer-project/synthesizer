@@ -33,7 +33,6 @@ from synthesizer.units import (
     accepts,
     deepcopy_with_shared_units,
     get_quantity_unit,
-    unyt_to_ndview,
 )
 from synthesizer.utils.operation_timers import timed
 
@@ -1026,25 +1025,16 @@ class SpectroscopicInstrument(InstrumentBase):
             noise = rng.standard_normal(arr.shape) * err
 
         elif self.noise_maps is not None:
-            # The fixed noise must match the trailing axes of the spectra:
-            # (nlam,) for spectra, or the whole cube for a spectral cube
+            # noise_maps must be on the same wavelengths as the spectra (lam,
+            # normally the instrument's grid, self.lam). It carries no
+            # wavelengths of its own, so only its shape can be checked
+            # against the spectra's, not which wavelengths it was made on.
             ndim = self.noise_maps.ndim
             if ndim > arr.ndim or self.noise_maps.shape != arr.shape[-ndim:]:
                 raise exceptions.InconsistentArguments(
                     f"{self.label}: noise_maps has shape "
                     f"{self.noise_maps.shape}, which doesn't match the "
                     f"spectra's shape {arr.shape}."
-                )
-
-            # noise_maps is defined on the instrument's own wavelength
-            # grid (self.lam), so the spectra's wavelengths must match it
-            # exactly, not just have a matching length
-            input_lam = unyt_to_ndview(lam, self.lam.units)
-            if not np.array_equal(input_lam, self.lam.ndview):
-                raise exceptions.InconsistentArguments(
-                    f"{self.label}: noise_maps is defined on the "
-                    "instrument's wavelength grid, which doesn't match "
-                    "the spectra's wavelengths."
                 )
 
             noise = self.noise_maps.to(units).value

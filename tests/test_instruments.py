@@ -2182,6 +2182,67 @@ def test_ifu_aperture_depth_is_converted_to_per_pixel(
     assert cube.arr.sum() == 3.0
 
 
+@pytest.mark.parametrize("quantity", ["lnu", "fnu"])
+@pytest.mark.parametrize(
+    "noise",
+    [
+        dict(depth=100 * nJy, snrs=5.0),
+        dict(noise_maps=np.ones((3, 3, 401)) * nJy),
+    ],
+)
+def test_ifu_integrated_spectroscopy_has_no_noise(noise, quantity):
+    """An IFU's noise is per spaxel, so its integrated spectra get none."""
+    instrument = IntegratedFieldUnit(
+        label="ifu",
+        lam=np.arange(9000.0, 13001.0, 10.0) * angstrom,
+        resolution=1 * arcsecond,
+        **noise,
+    )
+
+    # Cube noise is configured, integrated spectroscopy noise is not
+    assert instrument.can_do_noisy_resolved_spectroscopy
+    assert not instrument.can_do_noisy_spectroscopy
+
+    # Integrated spectroscopy completes, and matches the noiseless result
+    galaxy = _top_hat_galaxy(1.0)
+    spec = getattr(galaxy, f"get_spectroscopy_{quantity}")(instrument)["toy"]
+    expected = getattr(instrument, f"apply_lam_array_{quantity}")(
+        galaxy.spectra["toy"]
+    )
+    np.testing.assert_array_equal(
+        getattr(spec, quantity), getattr(expected, quantity)
+    )
+
+
+@pytest.mark.parametrize("shape", [(3,), (9, 3)])
+def test_ifu_noise_maps_must_match_the_full_cube(shape):
+    """A cube's fixed noise map must be the whole cube, not broadcast."""
+    lam = np.linspace(1000.0, 3000.0, 3) * angstrom
+    cube = SpectralCube(resolution=1 * arcsecond, fov=9 * arcsecond, lam=lam)
+    cube.arr = np.zeros((9, 9, 3))
+    cube.units = nJy
+    cube.quantity = "fnu"
+
+    # A full-cube map is added as it is
+    full = np.arange(9 * 9 * 3, dtype=float).reshape(9, 9, 3) * nJy
+    instrument = IntegratedFieldUnit(
+        label="ifu", lam=lam, resolution=1 * arcsecond, noise_maps=full
+    )
+    noisy = instrument.apply_noise_to_cube(cube)
+    np.testing.assert_allclose(noisy.arr, full.value)
+    np.testing.assert_allclose(noisy.noise_arr.to_value(nJy), full.value)
+
+    # One spectrum, or a partial map, is refused rather than broadcast
+    instrument = IntegratedFieldUnit(
+        label="ifu",
+        lam=lam,
+        resolution=1 * arcsecond,
+        noise_maps=np.ones(shape) * nJy,
+    )
+    with pytest.raises(exceptions.InconsistentArguments, match="cube's"):
+        instrument.apply_noise_to_cube(cube)
+
+
 @pytest.mark.parametrize(
     "resolving_power",
     [True, np.bool_(True), 0, -1.0, np.nan, np.inf, 1 + 2j],

@@ -124,6 +124,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             noise_maps (unyt_array, optional): A fixed noise cube added to
                 cubes as it is, with the same shape as the cube (the last
                 axis is wavelength) and units convertible to the cube units.
+                The wavelength grid must be the instrument's lam.
                 An alternative to depth and snrs.
             noise_source_maps (array, optional): An optional array or mapping
                 carrying source noise templates for future correlated-noise IFU
@@ -341,6 +342,17 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         return (
             self.depth is not None and self.snrs is not None
         ) or self.noise_maps is not None
+
+    @property
+    def can_do_noisy_spectroscopy(self):
+        """Return whether this instrument adds noise to integrated spectra.
+
+        An IFU's depth, SNR and noise maps describe the noise per spaxel of
+        a spectral cube, not of an integrated spectrum, so integrated
+        spectroscopy with an IFU is noiseless. Cube noise is applied with
+        apply_noise_to_cube (or apply_noise on a SpectralCube).
+        """
+        return False
 
     @timed("IntegratedFieldUnit._comparison_state")
     def _comparison_state(self):
@@ -770,6 +782,19 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             )
         units = getattr(cube.units, "units", cube.units)
 
+        # A fixed noise map for a cube must be the whole cube, not one
+        # spectrum (or partial map) broadcast over the spaxels.
+        if (
+            simspin_snr is None
+            and self.noise_maps is not None
+            and self.noise_maps.shape != cube.arr.shape
+        ):
+            raise exceptions.InconsistentArguments(
+                f"{self.label}: noise_maps has shape "
+                f"{self.noise_maps.shape}, which doesn't match the cube's "
+                f"shape {cube.arr.shape}."
+            )
+
         # Get the noise level per pixel from the depth. An aperture depth is
         # the noise in the aperture, so it is converted to per pixel,
         # sigma_pix = sigma_ap / sqrt(N_pix) with
@@ -777,13 +802,18 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         noise_level = None
         if self.depth is not None:
             noise_level = self.depth / self.snrs
-            if self.depth_app_radius is not None:
+            if self.depth_app_radius is not None and simspin_snr is None:
                 app_radius_pix = float(
                     (self.depth_app_radius / cube.resolution).to(
                         "dimensionless"
                     )
                 )
                 noise_level = noise_level / np.sqrt(np.pi * app_radius_pix**2)
+            elif self.depth_app_radius is not None and simspin_snr is not None:
+                warn(
+                    "Noise is not divided across an aperture in the SimSpin "
+                    "noise implementation"
+                )
 
         # Generate the noise, treating each pixel as a spectrum
         rng = np.random.default_rng(rng_seed)
