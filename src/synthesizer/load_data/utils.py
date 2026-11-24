@@ -78,7 +78,7 @@ def get_subfind_particle_indices(
 
     A Subfind catalogue orders particles by FOF group, then by subhalo
     within the group (each subhalo ordered by particle type), with the
-    unbound particles of the group last. 
+    unbound particles of the group last.
 
     If the catalogue stores the member IDs they are matched against the
     snapshot IDs, which does not require the snapshot to be group ordered.
