@@ -1824,7 +1824,10 @@ class Grid:
                 self.spectra[spectra_id], axis=axis_index
             )
 
-            # Marginalize the line luminosities and continua
+        # Marginalize the line luminosities and continua (these are looped
+        # over separately since a grid can have lines without spectra and
+        # vice versa)
+        for spectra_id in self.available_line_emissions:
             self.line_lums[spectra_id] = marginalize_function(
                 self.line_lums[spectra_id], axis=axis_index
             )
@@ -1873,16 +1876,18 @@ class Grid:
         # Adopt pre-interpolation function if provided
         pre_interp_function = pre_interp_function or (lambda x: x)
 
+        # Get the bracketing grid points and their interpolation weights
+        # (these are the same for every spectra and line array)
+        i0 = np.argmax(axis_values[axis_values <= value])
+        i1 = i0 + 1
+        value_0 = pre_interp_function(axis_values[i0])
+        value_1 = pre_interp_function(axis_values[i1])
+        value_i = pre_interp_function(value)
+        c0 = (value_1 - value_i) / (value_1 - value_0)
+        c1 = (value_i - value_0) / (value_1 - value_0)
+
         for spectra_id in self.available_spectra_emissions:
             # Interpolate the spectra
-            i0 = np.argmax(axis_values[axis_values <= value])
-            i1 = i0 + 1
-            value_0 = pre_interp_function(axis_values[i0])
-            value_1 = pre_interp_function(axis_values[i1])
-            value_i = pre_interp_function(value)
-            c0 = (value_1 - value_i) / (value_1 - value_0)
-            c1 = (value_i - value_0) / (value_1 - value_0)
-
             self.spectra[spectra_id] = np.sum(
                 [
                     c0
@@ -1893,7 +1898,10 @@ class Grid:
                 axis=0,
             )
 
-            # Interpolate the line luminosities and continua
+        # Interpolate the line luminosities and continua (these are looped
+        # over separately since a grid can have lines without spectra and
+        # vice versa)
+        for spectra_id in self.available_line_emissions:
             self.line_lums[spectra_id] = np.sum(
                 [
                     c0
@@ -1965,7 +1973,10 @@ class Grid:
                 axis=axis_index,
             )
 
-            # Extract the line luminosities and continua
+        # Extract the line luminosities and continua (these are looped
+        # over separately since a grid can have lines without spectra and
+        # vice versa)
+        for spectra_id in self.available_line_emissions:
             self.line_lums[spectra_id] = np.take(
                 self.line_lums[spectra_id],
                 np.argmin(np.abs(axis_values - value)),

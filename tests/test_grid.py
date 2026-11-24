@@ -1059,6 +1059,58 @@ class TestGridCollapse:
             assert collapsed_grid.line_lums[emission_type].flags.c_contiguous
             assert collapsed_grid.line_conts[emission_type].flags.c_contiguous
 
+    @pytest.mark.parametrize(
+        "method", ["marginalize", "interpolate", "nearest"]
+    )
+    @pytest.mark.parametrize(
+        "grid_kwargs",
+        [{"ignore_spectra": True}, {"ignore_lines": True}],
+        ids=["lines_only", "spectra_only"],
+    )
+    def test_collapse_partial_grid(self, test_grid_name, method, grid_kwargs):
+        """Test collapsing a grid holding only lines or only spectra.
+
+        Args:
+            test_grid_name (str):
+                The name of the test grid file.
+            method (str):
+                The collapse method to test.
+            grid_kwargs (dict):
+                The Grid kwargs selecting which emissions are loaded.
+        """
+        # Load a grid with only one of lines or spectra
+        grid = Grid(test_grid_name, **grid_kwargs)
+        original_shape = grid.shape
+
+        # Pick a value in the middle of the first axis (ignored when
+        # marginalizing)
+        axis_to_collapse = grid.axes[0]
+        axis_values = getattr(grid, axis_to_collapse)
+        value = axis_values[len(axis_values) // 2]
+
+        # Collapse the first axis
+        collapsed_grid = grid.collapse(
+            axis_to_collapse,
+            method=method,
+            value=None if method == "marginalize" else value,
+        )
+
+        # Every emission array the grid holds must have lost the first axis
+        for spectra_type in collapsed_grid.available_spectra:
+            assert (
+                collapsed_grid.spectra[spectra_type].shape
+                == original_shape[1:]
+            )
+        for emission_type in collapsed_grid.available_line_emissions:
+            assert (
+                collapsed_grid.line_lums[emission_type].shape
+                == original_shape[1:]
+            )
+            assert (
+                collapsed_grid.line_conts[emission_type].shape
+                == original_shape[1:]
+            )
+
     def test_collapse_invalid_args(self, test_grid_name):
         """Test collapse with invalid arguments."""
         # Create a fresh grid instance
