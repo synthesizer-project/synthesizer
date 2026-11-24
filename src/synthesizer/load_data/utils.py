@@ -84,6 +84,12 @@ def get_subfind_particle_indices(
     snapshot IDs, which does not require the snapshot to be group ordered.
     Otherwise the snapshot is assumed to be group ordered.
 
+    The member IDs are assumed to follow the catalogue order above, with
+    each subhalo in type blocks, as in the CAMELS catalogues. IDs need not
+    be unique across types (e.g. Simba), so the type of a member cannot be
+    recovered from its ID alone; a member that is not a snapshot particle
+    of this type raises an error.
+
     Args:
         lentype (np.ndarray of int):
             Number of particles of each type in each subhalo

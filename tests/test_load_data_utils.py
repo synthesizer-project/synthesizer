@@ -1,7 +1,9 @@
 """Tests for the load_data binning helpers."""
 
 import numpy as np
+import pytest
 
+from synthesizer.exceptions import InconsistentArguments
 from synthesizer.load_data.utils import (
     bin_overlap_matrix,
     cic_matrix,
@@ -123,3 +125,14 @@ def test_subfind_indices_repeated_ids():
     )
     assert len(np.unique(indices)) == len(indices)
     np.testing.assert_array_equal(star_ids[indices], ids[[2, 3, 4, 6, 10, 11]])
+
+
+def test_subfind_indices_not_type_ordered():
+    """Members that are not in type blocks within a subhalo are rejected."""
+    ids = np.arange(100, 113)
+    star_ids = ids[[2, 3, 4, 6, 8, 9, 10, 11, 12]]
+    ids[[1, 2]] = ids[[2, 1]]  # interleave gas and stars in subhalo 0
+    with pytest.raises(InconsistentArguments):
+        get_subfind_particle_indices(
+            *_subfind_catalogue(), 4, ids=ids, part_ids=star_ids
+        )
