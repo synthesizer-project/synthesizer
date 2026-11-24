@@ -27,10 +27,39 @@ from synthesizer.exceptions import UnmetDependency
 from synthesizer.load_data.utils import (
     age_lookup_table,
     get_begin_end_pointers,
+    get_subfind_particle_indices,
     lookup_age,
 )
 
 from ..particle.galaxy import Galaxy
+
+
+def _subfind_members(group_file, ptype, part_ids):
+    """Find the snapshot indices of the particles bound to each subhalo.
+
+    Args:
+        group_file (string):
+            Path to the Subfind catalogue.
+        ptype (int):
+            The particle type.
+        part_ids (np.ndarray of int):
+            IDs of the snapshot particles of this type.
+
+    Returns:
+        indices (np.ndarray of int):
+            Snapshot indices of the bound particles, in subhalo order.
+    """
+    with h5py.File(group_file, "r") as hf:
+        has_ids = "IDs" in hf and "ID" in hf["IDs"]
+        return get_subfind_particle_indices(
+            hf["Subhalo/SubhaloLenType"][:],
+            hf["Group/GroupLenType"][:],
+            hf["Subhalo/SubhaloGrNr"][:],
+            hf["Group/GroupFirstSub"][:],
+            ptype,
+            ids=hf["IDs/ID"][:] if has_ids else None,
+            part_ids=part_ids,
+        )
 
 
 def _load_CAMELS(
@@ -198,6 +227,7 @@ def load_CAMELS_IllustrisTNG(
         h = hf["Header"].attrs["HubbleParam"]
         Om0 = hf["Header"].attrs["Omega0"]
 
+        star_ids = hf["PartType4/ParticleIDs"][:]
         form_time = hf["PartType4/GFM_StellarFormationTime"][:]
         coods = hf["PartType4/Coordinates"][:]  # kpc (comoving)
         masses = hf["PartType4/Masses"][:]
@@ -206,6 +236,7 @@ def load_CAMELS_IllustrisTNG(
         metallicity = hf["PartType4/GFM_Metallicity"][:]
         hsml = hf["PartType4/SubfindHsml"][:]
 
+        gas_ids = hf["PartType0/ParticleIDs"][:]
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/GFM_Metallicity"][:]
@@ -218,6 +249,19 @@ def load_CAMELS_IllustrisTNG(
         lens = hf["Subhalo/SubhaloLenType"][:]
         pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
 
+    # Keep only the particles bound to subhaloes, in subhalo order
+    s_idx = _subfind_members(f"{_dir}/{group_name}", 4, star_ids)
+    g_idx = _subfind_members(f"{_dir}/{group_name}", 0, gas_ids)
+    form_time, coods, masses, imasses = (
+        a[s_idx] for a in (form_time, coods, masses, imasses)
+    )
+    _metals, metallicity, hsml = (
+        a[s_idx] for a in (_metals, metallicity, hsml)
+    )
+    g_sfr, g_masses, g_metals, g_coods, g_hsml = (
+        a[g_idx] for a in (g_sfr, g_masses, g_metals, g_coods, g_hsml)
+    )
+
     """
     remove wind particles
     """
@@ -226,18 +270,9 @@ def load_CAMELS_IllustrisTNG(
     if verbose:
         print("Wind particles:", np.sum(mask))
 
-    # change len indexes
-    for m in np.where(mask)[0]:
-        # create array of end indexes
-        cum_lens = np.append(0, np.cumsum(lens[:, 4]))
-
-        # which halo does this wind particle belong to?
-        which_halo = np.where(m < cum_lens)[0]
-
-        # check we're not at the end of the array
-        if len(which_halo) > 0:
-            # reduce the length of *this* halo
-            lens[which_halo[0] - 1, 4] -= 1
+    # reduce the length of the subhaloes containing wind particles
+    subhalo = np.repeat(np.arange(len(lens)), lens[:, 4])
+    lens[:, 4] = np.bincount(subhalo[~mask], minlength=len(lens))
 
     # filter particle arrays
     imasses = imasses[~mask]
@@ -376,6 +411,7 @@ def load_CAMELS_Astrid(
         h = hf["Header"].attrs["HubbleParam"][0]
         Om0 = hf["Header"].attrs["Omega0"][0]
 
+        star_ids = hf["PartType4/ParticleIDs"][:]
         form_time = hf["PartType4/GFM_StellarFormationTime"][:]
         coods = hf["PartType4/Coordinates"][:]  # kpc (comoving)
         masses = hf["PartType4/Masses"][:]
@@ -385,6 +421,7 @@ def load_CAMELS_Astrid(
         _metals = hf["PartType4/GFM_Metals"][:]
         metallicity = hf["PartType4/GFM_Metallicity"][:]
 
+        gas_ids = hf["PartType0/ParticleIDs"][:]
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/GFM_Metallicity"][:]
@@ -425,6 +462,19 @@ def load_CAMELS_Astrid(
     with h5py.File(f"{_dir}/{group_name}", "r") as hf:
         lens = hf["Subhalo/SubhaloLenType"][:]
         pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
+
+    # Keep only the particles bound to subhaloes, in subhalo order
+    s_idx = _subfind_members(f"{_dir}/{group_name}", 4, star_ids)
+    g_idx = _subfind_members(f"{_dir}/{group_name}", 0, gas_ids)
+    ages, coods, masses, imasses = (
+        a[s_idx] for a in (ages, coods, masses, imasses)
+    )
+    metallicity, s_oxygen, s_hydrogen = (
+        a[s_idx] for a in (metallicity, s_oxygen, s_hydrogen)
+    )
+    star_forming, g_masses, g_metals, g_coods, g_hsml = (
+        a[g_idx] for a in (star_forming, g_masses, g_metals, g_coods, g_hsml)
+    )
 
     # Convert comoving coordinates to physical kpc
     if physical:
@@ -519,6 +569,7 @@ def load_CAMELS_Simba(
         h = hf["Header"].attrs["HubbleParam"]
         Om0 = hf["Header"].attrs["Omega0"]
 
+        star_ids = hf["PartType4/ParticleIDs"][:]
         form_time = hf["PartType4/StellarFormationTime"][:]
         coods = hf["PartType4/Coordinates"][:]  # kpc (comoving)
         masses = hf["PartType4/Masses"][:]
@@ -527,6 +578,7 @@ def load_CAMELS_Simba(
         )  # * hf['Header'].attrs['MassTable'][1]
         _metals = hf["PartType4/Metallicity"][:]
 
+        gas_ids = hf["PartType0/ParticleIDs"][:]
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/Metallicity"][:][:, 0]
@@ -568,6 +620,19 @@ def load_CAMELS_Simba(
     with h5py.File(f"{_dir}/{group_name}", "r") as hf:
         lens = hf["Subhalo/SubhaloLenType"][:]
         pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
+
+    # Keep only the particles bound to subhaloes, in subhalo order
+    s_idx = _subfind_members(f"{_dir}/{group_name}", 4, star_ids)
+    g_idx = _subfind_members(f"{_dir}/{group_name}", 0, gas_ids)
+    ages, coods, masses, imasses = (
+        a[s_idx] for a in (ages, coods, masses, imasses)
+    )
+    metallicity, s_oxygen, s_hydrogen = (
+        a[s_idx] for a in (metallicity, s_oxygen, s_hydrogen)
+    )
+    star_forming, g_masses, g_metals, g_coods, g_hsml = (
+        a[g_idx] for a in (star_forming, g_masses, g_metals, g_coods, g_hsml)
+    )
 
     # Convert comoving coordinates to physical kpc
     if physical:

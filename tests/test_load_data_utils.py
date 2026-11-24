@@ -5,6 +5,7 @@ import numpy as np
 from synthesizer.load_data.utils import (
     bin_overlap_matrix,
     cic_matrix,
+    get_subfind_particle_indices,
     split_age_bins,
 )
 
@@ -78,3 +79,47 @@ def test_zero_width_bin_is_burst():
     assert frac.tolist() == [1.0]
     overlap = bin_overlap_matrix(lo, hi, GRID)
     assert overlap.tolist() == [[0.0, 1.0, 0.0, 0.0, 0.0]]
+
+
+def _subfind_catalogue():
+    """Two groups of gas (0) and stars (4), each with unbound particles."""
+    lentype = np.zeros((3, 6), dtype=int)
+    lentype[:, 0], lentype[:, 4] = [2, 1, 0], [3, 1, 2]
+    grp_lentype = np.zeros((2, 6), dtype=int)
+    grp_lentype[:, 0], grp_lentype[:, 4] = [4, 0], [6, 3]
+    return lentype, grp_lentype, np.array([0, 0, 1]), np.array([0, 2])
+
+
+def test_subfind_indices_group_ordered():
+    """Unbound particles at the end of a group are skipped."""
+    indices = get_subfind_particle_indices(*_subfind_catalogue(), 4)
+    np.testing.assert_array_equal(indices, [0, 1, 2, 3, 6, 7])
+    indices = get_subfind_particle_indices(*_subfind_catalogue(), 0)
+    np.testing.assert_array_equal(indices, [0, 1, 2])
+
+
+def test_subfind_indices_id_matched():
+    """Members are found by ID in a snapshot that is not group ordered."""
+    # Catalogue order: [sub0 gas, sub0 stars, sub1 gas, sub1 star,
+    # unbound gas, unbound stars], [sub2 stars, unbound star]
+    ids = np.arange(100, 113)
+    star_ids = ids[[2, 3, 4, 6, 8, 9, 10, 11, 12]]
+    perm = np.random.default_rng(0).permutation(len(star_ids))
+    indices = get_subfind_particle_indices(
+        *_subfind_catalogue(), 4, ids=ids, part_ids=star_ids[perm]
+    )
+    np.testing.assert_array_equal(
+        star_ids[perm][indices], ids[[2, 3, 4, 6, 10, 11]]
+    )
+
+
+def test_subfind_indices_repeated_ids():
+    """Repeated IDs are each matched to a different particle."""
+    ids = np.arange(100, 113)
+    ids[3] = ids[2]
+    star_ids = ids[[2, 3, 4, 6, 8, 9, 10, 11, 12]]
+    indices = get_subfind_particle_indices(
+        *_subfind_catalogue(), 4, ids=ids, part_ids=star_ids
+    )
+    assert len(np.unique(indices)) == len(indices)
+    np.testing.assert_array_equal(star_ids[indices], ids[[2, 3, 4, 6, 10, 11]])
