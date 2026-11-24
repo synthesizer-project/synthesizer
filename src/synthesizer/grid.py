@@ -47,7 +47,9 @@ from synthesizer.units import (
     Units,
     accepts,
     deepcopy_with_shared_units,
+    get_array_quantity_view,
     get_quantity_unit,
+    unyt_to_ndview,
 )
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.operation_timers import timed
@@ -1876,15 +1878,26 @@ class Grid:
         # Adopt pre-interpolation function if provided
         pre_interp_function = pre_interp_function or (lambda x: x)
 
+        # A single point axis has nothing to interpolate between, so just
+        # take that point (the bounds check above guarantees value is it)
+        if len(axis_values) == 1:
+            self._collapse_grid_nearest(axis, value)
+            return
+
         # Get the bracketing grid points and their interpolation weights
-        # (these are the same for every spectra and line array)
-        i0 = np.argmax(axis_values[axis_values <= value])
+        # (these are the same for every spectra and line array), clamping
+        # the lower point so a value at the top of the axis uses the final
+        # pair of points rather than indexing past the end
+        i0 = min(
+            np.argmax(axis_values[axis_values <= value]),
+            len(axis_values) - 2,
+        )
         i1 = i0 + 1
         value_0 = pre_interp_function(axis_values[i0])
         value_1 = pre_interp_function(axis_values[i1])
         value_i = pre_interp_function(value)
-        c0 = (value_1 - value_i) / (value_1 - value_0)
-        c1 = (value_i - value_0) / (value_1 - value_0)
+        c0 = float((value_1 - value_i) / (value_1 - value_0))
+        c1 = float((value_i - value_0) / (value_1 - value_0))
 
         for spectra_id in self.available_spectra_emissions:
             # Interpolate the spectra
@@ -1900,42 +1913,19 @@ class Grid:
 
         # Interpolate the line luminosities and continua (these are looped
         # over separately since a grid can have lines without spectra and
-        # vice versa)
+        # vice versa). The arithmetic is done on views of the raw buffers,
+        # with the units reattached to the result without a copy, since
+        # summing a list of unyt slices with np.sum would strip the units.
+        slice_0 = (slice(None),) * axis_index + (i0,)
+        slice_1 = (slice(None),) * axis_index + (i1,)
         for spectra_id in self.available_line_emissions:
-            self.line_lums[spectra_id] = np.sum(
-                [
-                    c0
-                    * np.take(
-                        self.line_lums[spectra_id],
-                        i0,
-                        axis=axis_index,
-                    ),
-                    c1
-                    * np.take(
-                        self.line_lums[spectra_id],
-                        i1,
-                        axis=axis_index,
-                    ),
-                ],
-                axis=0,
-            )
-            self.line_conts[spectra_id] = np.sum(
-                [
-                    c0
-                    * np.take(
-                        self.line_conts[spectra_id],
-                        i0,
-                        axis=axis_index,
-                    ),
-                    c1
-                    * np.take(
-                        self.line_conts[spectra_id],
-                        i1,
-                        axis=axis_index,
-                    ),
-                ],
-                axis=0,
-            )
+            for arrs in (self.line_lums, self.line_conts):
+                raw = unyt_to_ndview(arrs[spectra_id])
+                out = raw[slice_0] * c0
+                out += raw[slice_1] * c1
+                arrs[spectra_id] = get_array_quantity_view(
+                    out, arrs[spectra_id].units
+                )
 
         self._ensure_spectra_data_contiguous()
         self._ensure_line_data_contiguous()

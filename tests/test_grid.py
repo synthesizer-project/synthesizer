@@ -1111,6 +1111,50 @@ class TestGridCollapse:
                 == original_shape[1:]
             )
 
+            # The line arrays must also have kept their units
+            assert (
+                collapsed_grid.line_lums[emission_type].units
+                == grid.line_lums[emission_type].units
+            )
+            assert (
+                collapsed_grid.line_conts[emission_type].units
+                == grid.line_conts[emission_type].units
+            )
+
+        # Lines must still be extractable from the collapsed grid
+        if collapsed_grid.has_lines:
+            grid_point = tuple(0 for _ in collapsed_grid.axes)
+            collapsed_grid.get_lines(grid_point)
+
+    def test_collapse_interpolate_axis_top(self, test_grid_name):
+        """Test interpolating at the top of an axis gives the last point.
+
+        Args:
+            test_grid_name (str):
+                The name of the test grid file.
+        """
+        # Load the grid and get the last value on the first axis
+        grid = Grid(test_grid_name)
+        axis_to_collapse = grid.axes[0]
+        value = getattr(grid, axis_to_collapse)[-1]
+
+        # Collapse by interpolating to the very top of the axis
+        collapsed_grid = grid.collapse(
+            axis_to_collapse, method="interpolate", value=value
+        )
+
+        # The result must be the final slice along the collapsed axis
+        for spectra_type in collapsed_grid.available_spectra:
+            assert np.allclose(
+                collapsed_grid.spectra[spectra_type],
+                grid.spectra[spectra_type][-1],
+            )
+        for emission_type in collapsed_grid.available_line_emissions:
+            assert np.allclose(
+                collapsed_grid.line_lums[emission_type],
+                grid.line_lums[emission_type][-1],
+            )
+
     def test_collapse_invalid_args(self, test_grid_name):
         """Test collapse with invalid arguments."""
         # Create a fresh grid instance
