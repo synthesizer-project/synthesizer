@@ -3,6 +3,9 @@
 This instrument is designed to hold the attributes required by resolved
 spectroscopy. It extends :class:`SpectroscopicInstrument` with spatial
 resolution, optional PSFs, and noise definitions.
+
+Cube noise uses the noise models of :class:`SpectroscopicInstrument`, with
+each spatial pixel of the cube an independent spectrum.
 """
 
 import h5py
@@ -48,6 +51,13 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             with shape (nwave, nkernel), inherited from
             SpectroscopicInstrument. Each row corresponds to a
             wavelength in lam.
+        noise_shape_lam, noise_shape_std, template_on_detector: The noise
+            template settings, inherited from SpectroscopicInstrument.
+        depth_lam, depth_window: Where the depth applies, inherited from
+            SpectroscopicInstrument.
+        depth_app_radius (unyt_quantity, optional): The aperture radius for
+            the depth. If set, depth / snrs is the noise in the aperture and
+            is converted to per pixel; otherwise it is the noise per pixel.
     """
 
     @accepts(
@@ -56,6 +66,9 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         psf_lam=angstrom,
         lam=angstrom,
         depth_app_radius=(kpc, arcsecond),
+        noise_shape_lam=angstrom,
+        depth_lam=angstrom,
+        depth_window=angstrom,
     )
     @timed("IntegratedFieldUnit.__init__")
     def __init__(
@@ -73,6 +86,11 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         resolving_power=None,
         lsfs=None,
         psf_lam=None,
+        noise_shape_lam=None,
+        noise_shape_std=None,
+        template_on_detector=True,
+        depth_lam=None,
+        depth_window=None,
     ):
         """Initialise an integrated field unit instrument.
 
@@ -94,17 +112,20 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                 supplied PSF slices. Wavelength-dependent PSFs are
                 interpolated onto ``lam`` during initialisation. Defaults to
                 ``lam``.
-            depth (unyt_quantity, optional): The depth of the instrument, in
-                the same units as the image surface brightness.
-            depth_app_radius (unyt_quantity, optional): The aperture radius for
-                the depth measurement, in resolution units.
-            snrs (unyt_quantity, optional): The signal-to-noise ratio of the
-                instrument, in dimensionless units.
-            noise_maps (array, optional): An optional array with noise map as
-                a function of wavelength, in the same units as the image noise.
-                If a 2D array is supplied, every wavelength is assumed to have
-                the same noise map. If a 3D array is supplied, the last axis
-                must be the wavelength axis.
+            depth (unyt_quantity, optional): The depth of the instrument,
+                the spectral flux or luminosity density reached at
+                S/N = snrs, at depth_lam (or over depth_window), in units
+                convertible to the cube units.
+            depth_app_radius (unyt_quantity, optional): The aperture radius
+                for the depth, in resolution units. If set, depth / snrs is
+                the noise in the aperture and is converted to per pixel, as
+                for imaging; otherwise it is the noise per pixel.
+            snrs (float, optional): The signal-to-noise ratio at the depth.
+            noise_maps (unyt_array, optional): A fixed noise cube added to
+                cubes as it is, with the same shape as the cube (the last
+                axis is wavelength) and units convertible to the cube units.
+                The wavelength grid must be the instrument's lam.
+                An alternative to depth and snrs.
             noise_source_maps (array, optional): An optional array or mapping
                 carrying source noise templates for future correlated-noise IFU
                 machinery.
@@ -115,20 +136,40 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             lsfs (array, optional): Normalised line spread function
                 kernels with shape (nwave, nkernel), sampled on the
                 instrument wavelength grid.
+            noise_shape_lam (unyt_array, optional): Wavelengths of the
+                noise template, strictly increasing. Requires depth and snrs.
+            noise_shape_std (unyt_array, optional): The noise template,
+                the 1-sigma noise per pixel at noise_shape_lam (NaN in
+                detector gaps), in units convertible to the cube units. Only
+                its shape is used. Defaults to flat noise if not supplied.
+            template_on_detector (bool): Whether noise_shape_lam are the
+                detector pixel centres, giving correlated noise. If False
+                each wavelength element gets independent noise.
+            depth_lam (unyt_quantity, optional): The wavelength at which the
+                noise equals depth / snrs.
+            depth_window (unyt_array, optional): A wavelength window
+                (lam_min, lam_max) over whose median the noise equals
+                depth / snrs. With a noise template, exactly one of this or
+                depth_lam is required; flat noise needs neither.
         """
         # Initialise the shared spectroscopic instrument first
         super().__init__(
             label=label,
             lam=lam,
             depth=depth,
-            depth_app_radius=depth_app_radius,
             snrs=snrs,
             noise_maps=noise_maps,
             resolving_power=resolving_power,
             lsfs=lsfs,
+            noise_shape_lam=noise_shape_lam,
+            noise_shape_std=noise_shape_std,
+            template_on_detector=template_on_detector,
+            depth_lam=depth_lam,
+            depth_window=depth_window,
         )
 
         # Attach the IFU specific attributes
+        self.depth_app_radius = depth_app_radius
         self.resolution = resolution
         self.psfs = psfs
         self.psf_pixel_scale = psf_pixel_scale
@@ -298,6 +339,19 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
     @property
     def can_do_noisy_resolved_spectroscopy(self):
         """Return whether this instrument supports noisy IFU work."""
+        return (
+            self.depth is not None and self.snrs is not None
+        ) or self.noise_maps is not None
+
+    @property
+    def can_do_noisy_spectroscopy(self):
+        """Return whether this instrument adds noise to integrated spectra.
+
+        An IFU's depth, SNR and noise maps describe the noise per spaxel of
+        a spectral cube, not of an integrated spectrum, so integrated
+        spectroscopy with an IFU is noiseless. Cube noise is applied with
+        apply_noise_to_cube (or apply_noise on a SpectralCube).
+        """
         return False
 
     @timed("IntegratedFieldUnit._comparison_state")
@@ -308,6 +362,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             tuple: Hashable representation of the instrument state.
         """
         return super()._comparison_state() + (
+            _hashable_state(self.depth_app_radius),
             _hashable_state(self.resolution),
             _hashable_state(self.psfs),
             _hashable_state(self.psf_pixel_scale),
@@ -667,49 +722,151 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         )
 
     @timed("IntegratedFieldUnit.apply_noise_to_cube")
-    def apply_noise_to_cube(self, cube, **kwargs):
+    def apply_noise_to_cube(
+        self,
+        cube,
+        rng_seed=None,
+        inplace=False,
+        simspin_snr=None,
+    ):
         """Apply IFU noise to a spectral cube.
 
-        This placeholder makes the intended IFU-owned noise behaviour explicit
-        even though the underlying cube-noise machinery has not yet been
-        implemented.
+        The noise follows the SimSpin calculation if simspin_snr is given,
+        otherwise from the provided noise maps (a fixed realisation added
+        as it is), or calculated from the depth and SNR. For depth+SNR and
+        SimSpin noise each spatial pixel is an independent spectrum, with
+        noise from the noise models of SpectroscopicInstrument. For
+        depth+SNR noise with depth_app_radius set, the depth is an aperture
+        depth and the noise is converted to per pixel.
 
         Args:
             cube (SpectralCube): Spectral cube to which noise should be
                 applied.
-            **kwargs: Future keyword arguments for IFU noise application.
+            rng_seed (int, optional): Seed for the noise realisation. None
+                gives a fresh realisation.
+            inplace (bool): If ``True`` update ``cube`` directly and return
+                it. Otherwise return a new cube.
+            simspin_snr (float, optional): The S/N of the median-flux pixel
+                for SimSpin noise.
+
+        Returns:
+            SpectralCube: Cube with noise applied, with noise_arr (the noise
+                added, unyt_array) and weight_map (the inverse variance of
+                each voxel; 0 where it is undefined) attached.
 
         Raises:
-            UnimplementedFunctionality: Raised because IFU cube noise
-                application is not yet implemented.
+            MissingIFU: If the cube has not been generated.
+            MissingArgument: If there is no noise model to apply.
+            InconsistentArguments: If the cube has no units, or the noise
+                maps don't match the cube.
+            UnimplementedFunctionality: If noise source maps are set.
         """
-        # The IFU should eventually own cube-side noise application, but the
-        # required machinery has not yet been implemented.
-        raise exceptions.UnimplementedFunctionality(
-            "IntegratedFieldUnit.apply_noise_to_cube is not implemented yet."
+        # Ensure the spectral cube has been generated
+        if cube.arr is None:
+            raise exceptions.MissingIFU(
+                "The spectral cube array hasn't been generated yet. Run "
+                "generate_data_cube_hist() or generate_data_cube_smoothed() "
+                "before applying noise."
+            )
+        # Correlated noise from noise source maps has no machinery yet
+        if self.noise_source_maps is not None:
+            raise exceptions.UnimplementedFunctionality(
+                "Correlated noise from noise source maps is not implemented "
+                "yet for spectral cubes."
+            )
+
+        # The noise is defined in physical units, so the cube needs them
+        if cube.units is None:
+            raise exceptions.InconsistentArguments(
+                "The spectral cube must have units to apply noise."
+            )
+        units = getattr(cube.units, "units", cube.units)
+
+        # A fixed noise map for a cube must be the whole cube, not one
+        # spectrum (or partial map) broadcast over the spaxels.
+        if (
+            simspin_snr is None
+            and self.noise_maps is not None
+            and self.noise_maps.shape != cube.arr.shape
+        ):
+            raise exceptions.InconsistentArguments(
+                f"{self.label}: noise_maps has shape "
+                f"{self.noise_maps.shape}, which doesn't match the cube's "
+                f"shape {cube.arr.shape}."
+            )
+
+        # Get the noise level per pixel from the depth. An aperture depth is
+        # the noise in the aperture, so it is converted to per pixel,
+        # sigma_pix = sigma_ap / sqrt(N_pix) with
+        # N_pix = pi r^2 / resolution^2 (assuming independent pixels)
+        noise_level = None
+        if self.depth is not None:
+            noise_level = self.depth / self.snrs
+            if self.depth_app_radius is not None and simspin_snr is None:
+                app_radius_pix = float(
+                    (self.depth_app_radius / cube.resolution).to(
+                        "dimensionless"
+                    )
+                )
+                noise_level = noise_level / np.sqrt(np.pi * app_radius_pix**2)
+            elif self.depth_app_radius is not None and simspin_snr is not None:
+                warn(
+                    "Noise is not divided across an aperture in the SimSpin "
+                    "noise implementation"
+                )
+
+        # Generate the noise, treating each pixel as a spectrum
+        rng = np.random.default_rng(rng_seed)
+        noise, weight_map = self._generate_noise(
+            cube.arr,
+            cube.lam,
+            units,
+            rng,
+            noise_level=noise_level,
+            simspin_snr=simspin_snr,
         )
+
+        # Work on the original cube when requested, otherwise create a fresh
+        # container
+        if inplace:
+            working_cube = cube
+        else:
+            working_cube = SpectralCube(
+                resolution=cube.resolution,
+                fov=cube.fov,
+                lam=cube.lam,
+            )
+            working_cube.units = cube.units
+            working_cube.sed = cube.sed
+            working_cube.quantity = cube.quantity
+
+        # Add the noise and store it with the weight map
+        working_cube.arr = cube.arr + noise
+        working_cube.noise_arr = unyt_array(noise, units)
+        working_cube.weight_map = weight_map
+
+        return working_cube
 
     @timed("IntegratedFieldUnit.apply_noise")
     def apply_noise(self, observable, **kwargs):
         """Apply IFU noise to an observable.
 
-        This placeholder makes the intended IFU-owned noise behaviour explicit
-        even though the underlying resolved-spectroscopy noise machinery has
-        not yet been implemented.
-
         Args:
             observable: Observable to which IFU noise should be applied.
-            **kwargs: Future keyword arguments for IFU noise application.
+            **kwargs: Additional arguments passed to the noise method.
+
+        Returns:
+            SpectralCube: Cube with noise applied.
 
         Raises:
-            UnimplementedFunctionality: Raised because IFU noise application is
-                not yet implemented.
+            InconsistentArguments: If the observable is not a SpectralCube.
         """
-        # The IFU should eventually own resolved-spectroscopy noise
-        # application, but the required machinery has not yet been
-        # implemented.
-        raise exceptions.UnimplementedFunctionality(
-            "IntegratedFieldUnit.apply_noise is not implemented yet."
+        if isinstance(observable, SpectralCube):
+            return self.apply_noise_to_cube(observable, **kwargs)
+
+        raise exceptions.InconsistentArguments(
+            "IntegratedFieldUnit.apply_noise only supports SpectralCube "
+            "objects."
         )
 
     @timed("IntegratedFieldUnit.to_hdf5")
@@ -721,6 +878,10 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                 serialised.
         """
         super().to_hdf5(group)
+
+        write_instrument_attribute(
+            group, "DepthApertureRadius", self.depth_app_radius
+        )
 
         ds = group.create_dataset(
             "Resolution", data=self.resolution.value, dtype=float
@@ -831,6 +992,17 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             "noise_maps": noise_maps,
             "noise_source_maps": noise_source_maps,
             "resolving_power": group.attrs.get("resolving_power"),
+            "noise_shape_lam": read_instrument_attribute(
+                group, "NoiseShapeWavelength"
+            ),
+            "noise_shape_std": read_instrument_attribute(
+                group, "NoiseShapeStd"
+            ),
+            "template_on_detector": bool(
+                group.attrs.get("template_on_detector", True)
+            ),
+            "depth_lam": read_instrument_attribute(group, "DepthWavelength"),
+            "depth_window": read_instrument_attribute(group, "DepthWindow"),
         }
         payload.update(kwargs)
 
@@ -848,4 +1020,9 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             noise_maps=payload["noise_maps"],
             noise_source_maps=payload["noise_source_maps"],
             resolving_power=payload["resolving_power"],
+            noise_shape_lam=payload["noise_shape_lam"],
+            noise_shape_std=payload["noise_shape_std"],
+            template_on_detector=payload["template_on_detector"],
+            depth_lam=payload["depth_lam"],
+            depth_window=payload["depth_window"],
         )

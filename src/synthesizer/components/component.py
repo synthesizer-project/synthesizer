@@ -116,11 +116,17 @@ class Component(ABC):
         self.line_maps_noise_fnu = {}
 
         # Define the dictionaries to hold instrument specific spectroscopy
-        # (rest frame in the lnu dictionaries, observer frame in the fnu)
+        # (rest frame in the lnu dictionaries, observer frame in the fnu, and
+        # separate dictionaries for spectroscopy with an LSF applied, as for
+        # the images with a PSF above)
         self.spectroscopy_lnu = {}
         self.spectroscopy_fnu = {}
+        self.spectroscopy_lsf_lnu = {}
+        self.spectroscopy_lsf_fnu = {}
         self.particle_spectroscopy_lnu = {}
         self.particle_spectroscopy_fnu = {}
+        self.particle_spectroscopy_lsf_lnu = {}
+        self.particle_spectroscopy_lsf_fnu = {}
         self.data_cubes_lnu = {}
         self.data_cubes_fnu = {}
 
@@ -1624,6 +1630,10 @@ class Component(ABC):
         stored in spectroscopy_lnu (and particle_spectroscopy_lnu for any
         particle spectra).
 
+        If the instrument has a line spread function (LSF), the spectroscopy
+        with it applied is also stored (in spectroscopy_lsf_lnu and
+        particle_spectroscopy_lsf_lnu) and is the one returned.
+
         Args:
             instrument (Instrument):
                 The instrument to use for the spectroscopy.
@@ -1660,6 +1670,10 @@ class Component(ABC):
         spectra must already have their fluxes computed. The results are
         stored in spectroscopy_fnu (and particle_spectroscopy_fnu for any
         particle spectra).
+
+        If the instrument has a line spread function (LSF), the spectroscopy
+        with it applied is also stored (in spectroscopy_lsf_fnu and
+        particle_spectroscopy_lsf_fnu) and is the one returned.
 
         Args:
             instrument (Instrument):
@@ -1766,6 +1780,20 @@ class Component(ABC):
         if instrument.label not in spectroscopy:
             spectroscopy[instrument.label] = {}
 
+        # If the instrument has an LSF we also store the spectroscopy with
+        # it applied, in its own dictionary
+        if instrument.can_do_lsf_spectroscopy:
+            frame = "rest" if quantity == "lnu" else "observer"
+            spectroscopy_lsf = getattr(self, f"spectroscopy_lsf_{quantity}")
+            if instrument.label not in spectroscopy_lsf:
+                spectroscopy_lsf[instrument.label] = {}
+        else:
+            # Without an LSF, discard any spectroscopy stored for this
+            # instrument when it had one
+            getattr(self, f"spectroscopy_lsf_{quantity}", {}).pop(
+                instrument.label, None
+            )
+
         # Get the labels
         labels = self.spectra.keys() if limit_to is None else limit_to
 
@@ -1783,6 +1811,14 @@ class Component(ABC):
                 spectrum.cast(out_dtype)
             spectroscopy[instrument.label][label] = spectrum
 
+            # Apply the LSF to the original spectrum, so that it acts on the
+            # light before it is resampled onto the instrument wavelengths
+            if instrument.can_do_lsf_spectroscopy:
+                spectrum = instrument.apply_lsf(self.spectra[label], frame)
+                if out_dtype is not None:
+                    spectrum.cast(out_dtype)
+                spectroscopy_lsf[instrument.label][label] = spectrum
+
         # If we have particle spectra then do the same for them
         if (
             hasattr(self, "particle_spectra")
@@ -1793,6 +1829,19 @@ class Component(ABC):
             )
             if instrument.label not in particle_spectroscopy:
                 particle_spectroscopy[instrument.label] = {}
+
+            # Again, we store the spectroscopy with any LSF in its own
+            # dictionary
+            if instrument.can_do_lsf_spectroscopy:
+                particle_spectroscopy_lsf = getattr(
+                    self, f"particle_spectroscopy_lsf_{quantity}"
+                )
+                if instrument.label not in particle_spectroscopy_lsf:
+                    particle_spectroscopy_lsf[instrument.label] = {}
+            else:
+                getattr(self, f"particle_spectroscopy_lsf_{quantity}", {}).pop(
+                    instrument.label, None
+                )
 
             # Get the labels for particle spectra
             particle_labels = (
@@ -1814,7 +1863,21 @@ class Component(ABC):
                     spectrum.cast(out_dtype)
                 particle_spectroscopy[instrument.label][label] = spectrum
 
-        # Return the spectroscopy for the component
+                # Apply the LSF to the original particle spectra
+                if instrument.can_do_lsf_spectroscopy:
+                    spectrum = instrument.apply_lsf(
+                        self.particle_spectra[label], frame
+                    )
+                    if out_dtype is not None:
+                        spectrum.cast(out_dtype)
+                    particle_spectroscopy_lsf[instrument.label][label] = (
+                        spectrum
+                    )
+
+        # Return the spectroscopy for the component, with the LSF applied if
+        # the instrument has one
+        if instrument.can_do_lsf_spectroscopy:
+            return spectroscopy_lsf[instrument.label]
         return spectroscopy[instrument.label]
 
     def get_data_cube(
@@ -2086,6 +2149,9 @@ class Component(ABC):
         component using the instrument's wavelength array. The spectra are
         plotted in the order they are stored in the spectroscopy dictionary.
 
+        If the instrument has a line spread function (LSF), the spectroscopy
+        with it applied (spectroscopy_lsf_lnu) is plotted instead.
+
         Can either plot specific spectroscopy (specified via spectra_to_plot)
         or all spectroscopy on the component.
 
@@ -2155,6 +2221,9 @@ class Component(ABC):
         the component using the instrument's wavelength array. The spectra
         are plotted in the order they are stored in the spectroscopy
         dictionary.
+
+        If the instrument has a line spread function (LSF), the spectroscopy
+        with it applied (spectroscopy_lsf_fnu) is plotted instead.
 
         Can either plot specific spectroscopy (specified via spectra_to_plot)
         or all spectroscopy on the component.
@@ -2237,10 +2306,12 @@ class Component(ABC):
             ax (matplotlib.axes)
                 The matplotlib axes object containing the plotted data.
         """
-        # Get the spectroscopy for this frame and instrument
-        spectroscopy = getattr(self, f"spectroscopy_{quantity}")[
-            instrument_label
-        ]
+        # Get the spectroscopy for this frame and instrument, with the
+        # instrument's LSF applied if it has one
+        spectroscopy = getattr(self, f"spectroscopy_lsf_{quantity}")
+        if instrument_label not in spectroscopy:
+            spectroscopy = getattr(self, f"spectroscopy_{quantity}")
+        spectroscopy = spectroscopy[instrument_label]
 
         # Handling whether we are plotting all spectra, specific spectra, or
         # a single spectra
@@ -2284,9 +2355,13 @@ class Component(ABC):
         """Clear all spectroscopy from the component."""
         self.spectroscopy_lnu = {}
         self.spectroscopy_fnu = {}
+        self.spectroscopy_lsf_lnu = {}
+        self.spectroscopy_lsf_fnu = {}
         if hasattr(self, "particle_spectroscopy_lnu"):
             self.particle_spectroscopy_lnu = {}
             self.particle_spectroscopy_fnu = {}
+            self.particle_spectroscopy_lsf_lnu = {}
+            self.particle_spectroscopy_lsf_fnu = {}
 
     def clear_all_lines(self):
         """Clear all lines from the component."""

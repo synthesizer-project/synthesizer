@@ -133,9 +133,13 @@ class BaseGalaxy:
         self.line_maps_noise_fnu = {}
 
         # Initialise the dictionaries to hold instrument specific spectroscopy
-        # (rest frame in the lnu dictionary, observer frame in the fnu)
+        # (rest frame in the lnu dictionary, observer frame in the fnu, and
+        # separate dictionaries for spectroscopy with an LSF applied, as for
+        # the images with a PSF above)
         self.spectroscopy_lnu = {}
         self.spectroscopy_fnu = {}
+        self.spectroscopy_lsf_lnu = {}
+        self.spectroscopy_lsf_fnu = {}
         self.data_cubes_lnu = {}
         self.data_cubes_fnu = {}
 
@@ -3071,6 +3075,10 @@ class BaseGalaxy:
         (see SpectroscopicInstrument.apply_lam_array_lnu). The results are
         stored in spectroscopy_lnu on the galaxy and its components.
 
+        If the instrument has a line spread function (LSF), the spectroscopy
+        with it applied is also stored (in spectroscopy_lsf_lnu) and is the
+        one returned.
+
         Args:
             instrument (Instrument):
                 The instrument to use for the spectroscopy.
@@ -3105,6 +3113,10 @@ class BaseGalaxy:
         wavelengths (see SpectroscopicInstrument.apply_lam_array_fnu), so the
         spectra must already have their fluxes computed. The results are
         stored in spectroscopy_fnu on the galaxy and its components.
+
+        If the instrument has a line spread function (LSF), the spectroscopy
+        with it applied is also stored (in spectroscopy_lsf_fnu) and is the
+        one returned.
 
         Args:
             instrument (Instrument):
@@ -3223,6 +3235,20 @@ class BaseGalaxy:
         if instrument.label not in spectroscopy:
             spectroscopy[instrument.label] = {}
 
+        # If the instrument has an LSF we also store the spectroscopy with
+        # it applied, in its own dictionary
+        if instrument.can_do_lsf_spectroscopy:
+            frame = "rest" if quantity == "lnu" else "observer"
+            spectroscopy_lsf = getattr(self, f"spectroscopy_lsf_{quantity}")
+            if instrument.label not in spectroscopy_lsf:
+                spectroscopy_lsf[instrument.label] = {}
+        else:
+            # Without an LSF, discard any spectroscopy stored for this
+            # instrument when it had one
+            getattr(self, f"spectroscopy_lsf_{quantity}", {}).pop(
+                instrument.label, None
+            )
+
         # Get the labels
         labels = self.spectra.keys() if limit_to is None else limit_to
 
@@ -3240,6 +3266,14 @@ class BaseGalaxy:
                 spectrum.cast(out_dtype)
             spectroscopy[instrument.label][label] = spectrum
 
+            # Apply the LSF to the original spectrum, so that it acts on the
+            # light before it is resampled onto the instrument wavelengths
+            if instrument.can_do_lsf_spectroscopy:
+                spectrum = instrument.apply_lsf(self.spectra[label], frame)
+                if out_dtype is not None:
+                    spectrum.cast(out_dtype)
+                spectroscopy_lsf[instrument.label][label] = spectrum
+
         # Do the stars level spectra
         if self.stars is not None:
             self.stars._get_spectroscopy(
@@ -3252,6 +3286,10 @@ class BaseGalaxy:
                 instrument, quantity, limit_to=limit_to, out_dtype=out_dtype
             )
 
+        # Return the spectroscopy for the galaxy, with the LSF applied if the
+        # instrument has one
+        if instrument.can_do_lsf_spectroscopy:
+            return spectroscopy_lsf[instrument.label]
         return spectroscopy[instrument.label]
 
     def clear_all_spectra(self):
@@ -3278,6 +3316,8 @@ class BaseGalaxy:
         # Clear spectroscopy
         self.spectroscopy_lnu = {}
         self.spectroscopy_fnu = {}
+        self.spectroscopy_lsf_lnu = {}
+        self.spectroscopy_lsf_fnu = {}
         if self.stars is not None:
             self.stars.clear_all_spectroscopy()
         if self.black_holes is not None:
@@ -3367,6 +3407,9 @@ class BaseGalaxy:
         The spectra are plotted in the order they are stored in the
         spectroscopy dictionary.
 
+        If the instrument has a line spread function (LSF), the spectroscopy
+        with it applied (spectroscopy_lsf_lnu) is plotted instead.
+
         Args:
             instrument_label (str):
                 The label of the instrument whose spectroscopy to plot.
@@ -3420,6 +3463,15 @@ class BaseGalaxy:
             ax (matplotlib.axes)
                 The matplotlib axes object containing the plotted data.
         """
+
+        def pick_spectroscopy(emitter):
+            """Get the spectroscopy to plot for the galaxy or a component."""
+            # Use the spectroscopy with the instrument's LSF applied if it
+            # has one
+            if instrument_label in emitter.spectroscopy_lsf_lnu:
+                return emitter.spectroscopy_lsf_lnu[instrument_label]
+            return emitter.spectroscopy_lnu[instrument_label]
+
         # We need to construct the dictionary of all spectra to plot for each
         # component based on what we've been passed
         spectra = {}
@@ -3429,7 +3481,7 @@ class BaseGalaxy:
             if isinstance(combined_spectra, list):
                 spectra.update(
                     {
-                        key: self.spectroscopy_lnu[instrument_label][key]
+                        key: pick_spectroscopy(self)[key]
                         for key in combined_spectra
                     }
                 )
@@ -3440,16 +3492,14 @@ class BaseGalaxy:
                     }
                 )
             else:
-                spectra.update(self.spectroscopy_lnu[instrument_label])
+                spectra.update(pick_spectroscopy(self))
 
         # Get the stellar spectra
         if stellar_spectra:
             if isinstance(stellar_spectra, list):
                 spectra.update(
                     {
-                        "Stellar " + key: self.stars.spectroscopy_lnu[
-                            instrument_label
-                        ][key]
+                        "Stellar " + key: pick_spectroscopy(self.stars)[key]
                         for key in stellar_spectra
                     }
                 )
@@ -3462,12 +3512,8 @@ class BaseGalaxy:
             else:
                 spectra.update(
                     {
-                        "Stellar " + key: self.stars.spectroscopy_lnu[
-                            instrument_label
-                        ][key]
-                        for key in self.stars.spectroscopy_lnu[
-                            instrument_label
-                        ]
+                        "Stellar " + key: pick_spectroscopy(self.stars)[key]
+                        for key in pick_spectroscopy(self.stars)
                     }
                 )
 
@@ -3476,9 +3522,7 @@ class BaseGalaxy:
             if isinstance(gas_spectra, list):
                 spectra.update(
                     {
-                        "Gas " + key: self.gas.spectroscopy_lnu[
-                            instrument_label
-                        ][key]
+                        "Gas " + key: pick_spectroscopy(self.gas)[key]
                         for key in gas_spectra
                     }
                 )
@@ -3491,10 +3535,8 @@ class BaseGalaxy:
             else:
                 spectra.update(
                     {
-                        "Gas " + key: self.gas.spectroscopy_lnu[
-                            instrument_label
-                        ][key]
-                        for key in self.gas.spectroscopy_lnu[instrument_label]
+                        "Gas " + key: pick_spectroscopy(self.gas)[key]
+                        for key in pick_spectroscopy(self.gas)
                     }
                 )
 
@@ -3503,9 +3545,9 @@ class BaseGalaxy:
             if isinstance(black_hole_spectra, list):
                 spectra.update(
                     {
-                        "Black Hole " + key: self.black_holes.spectroscopy_lnu[
-                            instrument_label
-                        ][key]
+                        "Black Hole " + key: pick_spectroscopy(
+                            self.black_holes
+                        )[key]
                         for key in black_hole_spectra
                     }
                 )
@@ -3518,12 +3560,10 @@ class BaseGalaxy:
             else:
                 spectra.update(
                     {
-                        "Black Hole " + key: self.black_holes.spectroscopy_lnu[
-                            instrument_label
-                        ][key]
-                        for key in self.black_holes.spectroscopy_lnu[
-                            instrument_label
-                        ]
+                        "Black Hole " + key: pick_spectroscopy(
+                            self.black_holes
+                        )[key]
+                        for key in pick_spectroscopy(self.black_holes)
                     }
                 )
 
@@ -3566,6 +3606,9 @@ class BaseGalaxy:
         the galaxy and its components using the instrument's wavelength
         array. The spectra are plotted in the order they are stored in the
         spectroscopy dictionary.
+
+        If the instrument has a line spread function (LSF), the spectroscopy
+        with it applied (spectroscopy_lsf_fnu) is plotted instead.
 
         Args:
             instrument_label (str):
@@ -3621,6 +3664,15 @@ class BaseGalaxy:
             ax (matplotlib.axes)
                 The matplotlib axes object containing the plotted data.
         """
+
+        def pick_spectroscopy(emitter):
+            """Get the spectroscopy to plot for the galaxy or a component."""
+            # Use the spectroscopy with the instrument's LSF applied if it
+            # has one
+            if instrument_label in emitter.spectroscopy_lsf_fnu:
+                return emitter.spectroscopy_lsf_fnu[instrument_label]
+            return emitter.spectroscopy_fnu[instrument_label]
+
         # We need to construct the dictionary of all spectra to plot for each
         # component based on what we've been passed
         spectra = {}
@@ -3630,7 +3682,7 @@ class BaseGalaxy:
             if isinstance(combined_spectra, list):
                 spectra.update(
                     {
-                        key: self.spectroscopy_fnu[instrument_label][key]
+                        key: pick_spectroscopy(self)[key]
                         for key in combined_spectra
                     }
                 )
@@ -3641,16 +3693,14 @@ class BaseGalaxy:
                     }
                 )
             else:
-                spectra.update(self.spectroscopy_fnu[instrument_label])
+                spectra.update(pick_spectroscopy(self))
 
         # Get the stellar spectra
         if stellar_spectra:
             if isinstance(stellar_spectra, list):
                 spectra.update(
                     {
-                        "Stellar " + key: self.stars.spectroscopy_fnu[
-                            instrument_label
-                        ][key]
+                        "Stellar " + key: pick_spectroscopy(self.stars)[key]
                         for key in stellar_spectra
                     }
                 )
@@ -3663,12 +3713,8 @@ class BaseGalaxy:
             else:
                 spectra.update(
                     {
-                        "Stellar " + key: self.stars.spectroscopy_fnu[
-                            instrument_label
-                        ][key]
-                        for key in self.stars.spectroscopy_fnu[
-                            instrument_label
-                        ]
+                        "Stellar " + key: pick_spectroscopy(self.stars)[key]
+                        for key in pick_spectroscopy(self.stars)
                     }
                 )
 
@@ -3677,9 +3723,7 @@ class BaseGalaxy:
             if isinstance(gas_spectra, list):
                 spectra.update(
                     {
-                        "Gas " + key: self.gas.spectroscopy_fnu[
-                            instrument_label
-                        ][key]
+                        "Gas " + key: pick_spectroscopy(self.gas)[key]
                         for key in gas_spectra
                     }
                 )
@@ -3692,10 +3736,8 @@ class BaseGalaxy:
             else:
                 spectra.update(
                     {
-                        "Gas " + key: self.gas.spectroscopy_fnu[
-                            instrument_label
-                        ][key]
-                        for key in self.gas.spectroscopy_fnu[instrument_label]
+                        "Gas " + key: pick_spectroscopy(self.gas)[key]
+                        for key in pick_spectroscopy(self.gas)
                     }
                 )
 
@@ -3704,9 +3746,9 @@ class BaseGalaxy:
             if isinstance(black_hole_spectra, list):
                 spectra.update(
                     {
-                        "Black Hole " + key: self.black_holes.spectroscopy_fnu[
-                            instrument_label
-                        ][key]
+                        "Black Hole " + key: pick_spectroscopy(
+                            self.black_holes
+                        )[key]
                         for key in black_hole_spectra
                     }
                 )
@@ -3719,12 +3761,10 @@ class BaseGalaxy:
             else:
                 spectra.update(
                     {
-                        "Black Hole " + key: self.black_holes.spectroscopy_fnu[
-                            instrument_label
-                        ][key]
-                        for key in self.black_holes.spectroscopy_fnu[
-                            instrument_label
-                        ]
+                        "Black Hole " + key: pick_spectroscopy(
+                            self.black_holes
+                        )[key]
+                        for key in pick_spectroscopy(self.black_holes)
                     }
                 )
 
