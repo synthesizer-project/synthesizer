@@ -10,6 +10,7 @@ import os
 import sys
 import threading
 import time
+from unittest import mock
 
 import numpy as np
 import pytest
@@ -473,21 +474,12 @@ class TestThreadedParity:
         self, no_gil, monkeypatch, varied_model, random_part_stars
     ):
         """Test errors raised on a worker still name the failing model."""
-
-        def fail(*args, **kwargs):
-            """Fail every combination.
-
-            Args:
-                *args: Ignored.
-                **kwargs: Ignored.
-
-            Raises:
-                ValueError: Always.
-            """
-            raise ValueError("combination failed")
-
         # Make every combination fail, then generate on threads
-        monkeypatch.setattr(EmissionModel, "_combine_spectra", fail)
+        monkeypatch.setattr(
+            EmissionModel,
+            "_combine_spectra",
+            mock.Mock(side_effect=ValueError("combination failed")),
+        )
         with pytest.raises(ValueError, match="combination failed") as excinfo:
             random_part_stars.get_spectra(varied_model, nr_model_threads=4)
 

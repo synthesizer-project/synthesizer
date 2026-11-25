@@ -331,6 +331,13 @@ class ModelQueue:
             Exception:
                 Any exception raised by ``process`` is re-raised unchanged.
         """
+        # Work out how many threads we can actually use (this falls back to
+        # one with a warning when the GIL is enabled)
+        nr_threads = resolve_threads(
+            nr_model_threads,
+            "nr_model_threads",
+            nthreads,
+        )
 
         # Reused or externally supplied emissions still need to unlock the
         # graph, but they do not need to be regenerated.
@@ -343,14 +350,6 @@ class ModelQueue:
             """
             if model.label not in emissions:
                 process(model)
-
-        # Work out how many threads we can actually use (this falls back to
-        # one with a warning when the GIL is enabled)
-        nr_threads = resolve_threads(
-            nr_model_threads,
-            "nr_model_threads",
-            nthreads,
-        )
 
         # With a single thread, process each model as soon as it becomes
         # ready, marking it done to unlock its dependents
