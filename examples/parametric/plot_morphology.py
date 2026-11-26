@@ -21,11 +21,10 @@ from astropy.cosmology import FlatLambdaCDM
 from unyt import kpc, unyt_array
 
 from synthesizer.parametric import (
+    Annuli,
     Gaussian2D,
-    Gaussian2DAnnuli,
     PointSource,
     Sersic2D,
-    Sersic2DAnnuli,
 )
 
 # Common settings
@@ -49,18 +48,15 @@ gauss = Gaussian2D(
 print(gauss)
 gauss_grid = gauss.get_density_grid(resolution, npix)
 
-# Gaussian annulus
+# Gaussian annuli (the radii are the edges of the annuli), each annulus is
+# a population with its own signal, so a signal of 1 for the second annulus
+# and 0 for the others gives the second annulus alone
 radii = unyt_array([1.0, 3.0, 5.0, 7.0, np.inf], "kpc")
-gauss_ann = Gaussian2DAnnuli(
-    x_mean=0 * kpc,
-    y_mean=0 * kpc,
-    stddev_x=1 * kpc,
-    stddev_y=2 * kpc,
-    radii=radii,
-    rho=0.3,
-)
+gauss_ann = Annuli(gauss, radii)
 print(gauss_ann)
-gauss_ann_grid = gauss_ann.get_density_grid(resolution, npix, annulus=1)
+gauss_ann_grid = gauss_ann.get_weighted_density_grid(
+    resolution, npix, np.eye(gauss_ann.npop)[1]
+)
 
 # Point source at (2,2) kpc
 ps = PointSource(
@@ -86,31 +82,22 @@ sersic = Sersic2D(
 print(sersic)
 sersic_grid = sersic.get_density_grid(resolution, npix)
 
-# Sersic annulus (note that infinity is always added as the last radius)
-s_radii = unyt_array([2.0, 4.0, 6.0, 8.0], "kpc")
-sersic_ann = Sersic2DAnnuli(
-    r_eff=4 * kpc,
-    radii=s_radii,
-    amplitude=1.0,
-    sersic_index=2.0,
-    x_0=0 * kpc,
-    y_0=0 * kpc,
-    theta=np.deg2rad(30),
-    ellipticity=0.4,
-    cosmo=cosmo,
-    redshift=z,
-)
+# Sersic annuli
+s_radii = unyt_array([2.0, 4.0, 6.0, 8.0, np.inf], "kpc")
+sersic_ann = Annuli(sersic, s_radii)
 print(sersic_ann)
-sersic_ann_grid = sersic_ann.get_density_grid(resolution, npix, annulus=1)
+sersic_ann_grid = sersic_ann.get_weighted_density_grid(
+    resolution, npix, np.eye(sersic_ann.npop)[1]
+)
 
 # Plot everything in a 2×3 grid
 fig, axes = plt.subplots(2, 3, figsize=(12, 8))
 plots = [
     (gauss_grid, "Gaussian2D"),
-    (gauss_ann_grid, "Gaussian2DAnnuli (outer shell)"),
+    (gauss_ann_grid, "Gaussian2D annulus"),
     (ps_grid, "PointSource"),
     (sersic_grid, "Sersic2D (n=2)"),
-    (sersic_ann_grid, "Sersic2DAnnuli (outer shell)"),
+    (sersic_ann_grid, "Sersic2D annulus"),
 ]
 for ax, (grid, title) in zip(axes.flat, plots):
     im = ax.contourf(xx, yy, grid, levels=50)
