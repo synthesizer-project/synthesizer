@@ -309,7 +309,7 @@ def test_particle_galaxy_combines_additive_child_outputs():
             filters,
             unyt_array([scale, 2 * scale], erg / s / Hz),
         )
-        child.spectroscopy["inst"] = {
+        child.spectroscopy_lnu["inst"] = {
             "galaxy": Sed(
                 lam=lam,
                 lnu=unyt_array([2 * scale, 3 * scale], erg / s / Hz),
@@ -352,7 +352,7 @@ def test_particle_galaxy_combines_additive_child_outputs():
         np.array([total_scale, 2 * total_scale]),
     )
     np.testing.assert_allclose(
-        galaxy.spectroscopy["inst"]["galaxy"].lnu.value,
+        galaxy.spectroscopy_lnu["inst"]["galaxy"].lnu.value,
         np.array([2 * total_scale, 3 * total_scale]),
     )
     assert np.sum(galaxy.images_lnu["inst"]["filter_a"].arr) == 4 * total_scale
