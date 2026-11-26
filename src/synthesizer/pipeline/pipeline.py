@@ -28,7 +28,10 @@ Example usage:
 ```
 """
 
+import threading
 import time
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -59,6 +62,7 @@ from synthesizer.pipeline.pipeline_utils import (
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Units, has_units, unyt_to_ndview
 from synthesizer.utils.art import Art
+from synthesizer.utils.free_threading import resolve_threads
 from synthesizer.utils.operation_timers import (
     build_timing_analysis_rows,
     print_timing_analysis_table,
@@ -155,6 +159,7 @@ class Pipeline:
         verbose=1,
         report_memory=False,
         max_npart=None,
+        nr_galaxy_threads=1,
         outpath=None,
         flush_ngalaxies=None,
         flush_memory=None,
@@ -202,6 +207,11 @@ class Pipeline:
                 TODO: while gas particles don't carry spectra we only need to
                 consider stars and black holes in this threshold. If we have
                 gas spectra in the future we will need to amend this.
+            nr_galaxy_threads (int): The number of galaxies to process
+                concurrently on separate threads. This is only used on a
+                free-threaded (no-GIL) build of Python with the GIL disabled,
+                otherwise the galaxies are processed serially with a warning.
+                Each thread also uses nthreads OpenMP threads. Default is 1.
             outpath (str): The path to the HDF5 file to write. This is
                 required if outputs are to be flushed to file while running
                 (see flush_ngalaxies and flush_memory). Otherwise the path
@@ -261,6 +271,12 @@ class Pipeline:
                 "Can't use multiple threads without OpenMP support. "
                 " Install with: `WITH_OPENMP=1 pip install .`"
             )
+
+        # How many galaxies are we processing concurrently? (This falls back
+        # to 1 with a warning when the GIL is enabled.)
+        self.nr_galaxy_threads = resolve_threads(
+            nr_galaxy_threads, "nr_galaxy_threads", nthreads
+        )
 
         # Define flags for what we will do
         self._do_los_optical_depths = False
@@ -342,6 +358,13 @@ class Pipeline:
         # The per-galaxy outputs are held in buffers until they're written
         # (and flushed to file while running if a threshold is given)
         self.io_buffers = PipelineIOBuffers(flush_ngalaxies, flush_memory)
+
+        # Threads processing galaxies record their timings and counts in their
+        # own containers (see _op_timing and _op_counts), which are summed
+        # into the main ones once all galaxies are done.
+        self._thread_counters = threading.local()
+        self._worker_counters = []
+        self._worker_counters_lock = threading.Lock()
 
         # We'll need to store the timing information to be reported at the
         # end of the pipeline (this will be stored with the operation
@@ -452,6 +475,54 @@ class Pipeline:
         # Hold back everyone in MPI land until we're all ready to go
         if self.using_mpi:
             comm.Barrier()
+
+    @property
+    def _op_timing(self):
+        """Return the operation timings for the calling thread.
+
+        Worker threads processing galaxies (see _run_per_thread_gal_queue)
+        each have their own timings container, so they never update the same
+        dictionary concurrently. Every other thread uses the main container.
+
+        Returns:
+            dict: The operation timings, keyed by operation name.
+        """
+        # A worker thread will have attached its own container, otherwise
+        # we are on the main thread and use the main container
+        return getattr(self._thread_counters, "timing", self._main_op_timing)
+
+    @_op_timing.setter
+    def _op_timing(self, value):
+        """Set the main operation timings.
+
+        Args:
+            value (dict): The operation timings, keyed by operation name.
+        """
+        self._main_op_timing = value
+
+    @property
+    def _op_counts(self):
+        """Return the operation counts for the calling thread.
+
+        Worker threads processing galaxies (see _run_per_thread_gal_queue)
+        each have their own counts container, so they never update the same
+        dictionary concurrently. Every other thread uses the main container.
+
+        Returns:
+            dict: The operation counts, keyed by operation name.
+        """
+        # A worker thread will have attached its own container, otherwise
+        # we are on the main thread and use the main container
+        return getattr(self._thread_counters, "counts", self._main_op_counts)
+
+    @_op_counts.setter
+    def _op_counts(self, value):
+        """Set the main operation counts.
+
+        Args:
+            value (dict): The operation counts, keyed by operation name.
+        """
+        self._main_op_counts = value
 
     def _say_hello(self):
         """Print a nice welcome."""
@@ -4439,6 +4510,304 @@ class Pipeline:
         # Done!
         self._op_timing["Unpacking results"] += time.perf_counter() - start
 
+    @timed("Pipeline._process_galaxy")
+    def _process_galaxy(self, gal):
+        """Generate everything requested for a single galaxy.
+
+        This is everything except the steps which write to the pipeline's
+        outputs (see _finish_galaxy), so galaxies can be processed
+        concurrently on separate threads.
+
+        Args:
+            gal (Galaxy): The galaxy to process.
+
+        Returns:
+            float: The time taken to process the galaxy.
+        """
+        # Start the clock for this galaxy (this is reported in the progress
+        # table once the galaxy is finished)
+        start = time.perf_counter()
+
+        # Are we generating LOS optical depths?
+        # Note that this can only be done on galaxies prior to any
+        # splitting done for memory optimisation
+        if self._do_los_optical_depths:
+            self._get_los_optical_depths(gal)
+
+        # If we have a particle galaxy, see if we need to split it
+        if isinstance(gal, ParticleGalaxy):
+            gals = gal.split(self._max_npart)
+        else:
+            gals = [gal]
+
+        # If chunking is active, clear any existing additive outputs on the
+        # parent before processing children and accumulating back onto it
+        # just to be sure, in case the galaxy has been used before
+        if len(gals) > 1:
+            clear_pipeline_outputs(gal)
+
+        # Loop over the split galaxies list (which may just be a list
+        # containing the original gal above)
+        while len(gals) > 0:
+            # Get the next galaxy
+            with timer("Pipeline.run.pop_chunk"):
+                _gal = gals.pop(0)
+
+            # Are we generating SFZHs?
+            if self._do_sfzh:
+                self._get_sfzh(_gal)
+
+            # Are we generating SFHs?
+            if self._do_sfh:
+                self._get_sfh(_gal)
+
+            # Are we generating lnu spectra?
+            if self._do_lnu_spectra:
+                self._get_spectra(_gal)
+
+            # Are we generating fnu spectra?
+            if self._do_fnu_spectra:
+                self._get_observed_spectra(_gal)
+
+            # Are we generating photometric luminosities?
+            if self._do_luminosities:
+                self._get_photometry_luminosities(_gal)
+
+            # Are we generating photometric fluxes?
+            if self._do_fluxes:
+                self._get_photometry_fluxes(_gal)
+
+            # Are we generating emission lines?
+            if self._do_lum_lines:
+                self._get_lines(_gal)
+
+            # Are we generating observed emission lines?
+            if self._do_flux_lines:
+                self._get_observed_lines(_gal)
+
+            # Are we generating luminosity images?
+            if self._do_images_lum:
+                self._get_images_luminosity(_gal)
+
+            # Are we generating flux images?
+            if self._do_images_flux:
+                self._get_images_flux(_gal)
+
+            # Are we generating luminosity line maps?
+            if self._do_line_maps_lum:
+                self._get_line_maps_luminosity(_gal)
+
+            # Are we generating flux line maps?
+            if self._do_line_maps_flux:
+                self._get_line_maps_flux(_gal)
+
+            # Are we generating luminosity data cubes?
+            if self._do_lnu_data_cubes:
+                self._get_data_cubes_lnu(_gal)
+
+            # Are we generating flux data cubes?
+            if self._do_fnu_data_cubes:
+                self._get_data_cubes_fnu(_gal)
+
+            # Are we generating luminosity spectroscopy?
+            if self._do_spectroscopy_lnu:
+                self._get_spectroscopy_lnu(_gal)
+
+            # Are we generating flux spectroscopy?
+            if self._do_spectroscopy_fnu:
+                self._get_spectroscopy_fnu(_gal)
+
+            # Child chunk outputs are accumulated back onto the original
+            # parent galaxy once this chunk has been processed.
+            # Combine back onto the original galaxy if necessary
+            if _gal is not gal:
+                with timer("Pipeline.run.accumulate_child"):
+                    accumulate_pipeline_results_from_child(gal, _gal)
+
+                with timer("Pipeline.run.cleanup_child"):
+                    del _gal
+
+        # Run any extra analysis functions. These run here, rather than when
+        # the galaxy is finished, so they also run concurrently when galaxies
+        # are processed on threads.
+        self._run_extra_analysis(gal)
+
+        # Return how long the processing took so the progress table can
+        # report it once the galaxy is finished
+        return time.perf_counter() - start
+
+    @timed("Pipeline._finish_galaxy")
+    def _finish_galaxy(self, gal, igal, elapsed):
+        """Collect the outputs of a processed galaxy into the pipeline.
+
+        These steps write to containers on the pipeline itself, so this must
+        be called on the main thread, once per galaxy, in the order the
+        galaxies were added. This keeps the outputs in galaxy order (and the
+        cosmic SED sums in the same order) regardless of how the galaxies
+        were processed.
+
+        Args:
+            gal (Galaxy): The processed galaxy.
+            igal (int): The index of the galaxy.
+            elapsed (float): The time taken to process the galaxy.
+        """
+        # Shift the start time back by the processing time so the progress
+        # table reports the processing and finishing time for this galaxy
+        # (rather than including any time the galaxy spent waiting to be
+        # finished when processing on threads)
+        start = time.perf_counter() - elapsed
+
+        # Cosmic SEDs must be measured on the fully accumulated parent
+        # galaxy so any split-galaxy filtering uses integrated properties.
+        if self._do_cosmic_lnu:
+            self._get_cosmic_sed(gal)
+
+        if self._do_cosmic_fnu:
+            self._get_observed_cosmic_sed(gal)
+
+        # Ok, we're done with this galaxy so we can unpack the results
+        self._unpack_results(gal)
+
+        # Flush the outputs to file if we're holding too many
+        if self.io_buffers.should_flush():
+            self._flush_outputs()
+
+        # Output into the progress table
+        self._add_progress_row(gal, igal, start)
+
+    def _run_single_gal_queue(self):
+        """Process the galaxies one at a time on the calling thread.
+
+        Galaxies are popped from the pipeline as they are processed, so each
+        one is freed as soon as its results have been unpacked.
+        """
+        # Loop over galaxies until we have processed them all
+        igal = 0
+        while len(self.galaxies) > 0:
+            # Pop the first galaxy from the list
+            with timer("Pipeline.run.pop_galaxy"):
+                gal = self.galaxies.pop(0)
+
+            # Generate everything requested for this galaxy
+            elapsed = self._process_galaxy(gal)
+
+            # Collect its outputs into the pipeline and report progress
+            self._finish_galaxy(gal, igal, elapsed)
+            igal += 1
+
+            # Now we can remove the galaxy to free up memory
+            with timer("Pipeline.run.cleanup_galaxy"):
+                del gal
+
+    def _process_galaxy_on_thread(self, gal):
+        """Process a galaxy on a worker thread.
+
+        Each worker thread records its timings and counts in its own
+        containers, which _run_per_thread_gal_queue sums into the main ones
+        once all galaxies are done.
+
+        Args:
+            gal (Galaxy): The galaxy to process.
+
+        Returns:
+            float: The time taken to process the galaxy.
+        """
+        # Worker threads are reused for many galaxies, so only create this
+        # thread's containers the first time it processes a galaxy
+        if not hasattr(self._thread_counters, "timing"):
+            # Start from zero for every operation the main containers know
+            # about (analysis functions add their own keys as they run)
+            timing = dict.fromkeys(self._main_op_timing, 0.0)
+            counts = dict.fromkeys(self._main_op_counts, 0)
+
+            # Attach them to this thread so _op_timing and _op_counts return
+            # them on this thread
+            self._thread_counters.timing = timing
+            self._thread_counters.counts = counts
+
+            # Register them so they can be summed at the end (several workers
+            # can start at once, hence the lock)
+            with self._worker_counters_lock:
+                self._worker_counters.append((timing, counts))
+
+        # Now we can process the galaxy as normal
+        return self._process_galaxy(gal)
+
+    def _run_per_thread_gal_queue(self):
+        """Process the galaxies concurrently on a pool of threads.
+
+        The worker threads only process galaxies (see _process_galaxy), while
+        the main thread hands out galaxies and finishes them (see
+        _finish_galaxy) in the order they were added. This means the outputs
+        are identical to processing the galaxies serially.
+
+        The main thread keeps at most two galaxies per thread in flight, so
+        the workers always have a galaxy waiting while the main thread
+        finishes another, and only those galaxies are held in memory.
+
+        This is only used on a free-threaded (no-GIL) build of Python with the
+        GIL disabled (see resolve_threads), otherwise the threads would
+        contend for the GIL rather than run in parallel.
+        """
+        # How many galaxies can be submitted but not yet finished?
+        max_in_flight = 2 * self.nr_galaxy_threads
+
+        # The galaxies in flight along with the futures processing them, in
+        # the order they were submitted (and therefore must be finished)
+        in_flight = deque()
+
+        # Loop until every galaxy has been both processed and finished
+        igal = 0
+        with ThreadPoolExecutor(self.nr_galaxy_threads) as executor:
+            try:
+                while len(self.galaxies) > 0 or len(in_flight) > 0:
+                    # Top up the galaxies in flight by popping the next
+                    # galaxies from the list and submitting them to the pool
+                    while len(self.galaxies) > 0 and (
+                        len(in_flight) < max_in_flight
+                    ):
+                        with timer("Pipeline.run.pop_galaxy"):
+                            gal = self.galaxies.pop(0)
+                        future = executor.submit(
+                            self._process_galaxy_on_thread, gal
+                        )
+                        in_flight.append((gal, future))
+
+                    # Wait for the oldest galaxy to be processed (result
+                    # re-raises any error from its worker), then collect its
+                    # outputs into the pipeline and report progress
+                    gal, future = in_flight.popleft()
+                    elapsed = future.result()
+                    self._finish_galaxy(gal, igal, elapsed)
+                    igal += 1
+
+                    # Now we can remove the galaxy to free up memory
+                    with timer("Pipeline.run.cleanup_galaxy"):
+                        del gal, future
+
+            except BaseException:
+                # Something went wrong, cancel any galaxies which haven't
+                # started yet (the context manager then waits for those
+                # already running) before re-raising the error
+                executor.shutdown(cancel_futures=True)
+                raise
+
+        # Sum the worker threads' timings and counts into the main ones now
+        # every worker has finished (analysis functions can add keys the main
+        # containers don't have yet, hence the gets)
+        for timing, counts in self._worker_counters:
+            for key, value in timing.items():
+                self._main_op_timing[key] = (
+                    self._main_op_timing.get(key, 0.0) + value
+                )
+            for key, value in counts.items():
+                self._main_op_counts[key] = (
+                    self._main_op_counts.get(key, 0) + value
+                )
+
+        # Clear the registered containers so a subsequent run starts afresh
+        self._worker_counters.clear()
+
     @timed("Pipeline.run")
     def run(self):
         """Run the pipeline.
@@ -4520,149 +4889,12 @@ class Pipeline:
         with timer("Pipeline.run.print_progress_header"):
             self._print_progress_header()
 
-        # Loop over galaxies and compute what has been requested using get_*
-        # signalling methods
-        igal = 0
-        _gal = None
-        while len(self.galaxies) > 0:
-            start_gal = time.perf_counter()
-
-            # Drop the reference the previous iteration left on its last chunk
-            # before the next galaxy is pulled in. The outer pop below rebinds
-            # gal, but until this reference goes too the previous galaxy stays
-            # resident, so its arrays were being freed later and the cost was
-            # landing on the next chunk pop rather than being named here.
-            with timer("Pipeline.run.release_prev_galaxy"):
-                _gal = None
-
-            # Pop the first galaxy from the list
-            with timer("Pipeline.run.pop_galaxy"):
-                gal = self.galaxies.pop(0)
-
-            # Are we generating LOS optical depths?
-            # Note that this can only be done on galaxies prior to any
-            # splitting done for memory optimisation
-            if self._do_los_optical_depths:
-                self._get_los_optical_depths(gal)
-
-            # If we have a particle galaxy, see if we need to split it
-            if isinstance(gal, ParticleGalaxy):
-                gals = gal.split(self._max_npart)
-            else:
-                gals = [gal]
-
-            # If chunking is active, clear any existing additive outputs on the
-            # parent before processing children and accumulating back onto it
-            # just to be sure, in case the galaxy has been used before
-            if len(gals) > 1:
-                clear_pipeline_outputs(gal)
-
-            # Loop over the split galaxies list (which may just be a list
-            # containing the original gal above)
-            while len(gals) > 0:
-                # Get the next galaxy
-                with timer("Pipeline.run.pop_chunk"):
-                    _gal = gals.pop(0)
-
-                # Are we generating SFZHs?
-                if self._do_sfzh:
-                    self._get_sfzh(_gal)
-
-                # Are we generating SFHs?
-                if self._do_sfh:
-                    self._get_sfh(_gal)
-
-                # Are we generating lnu spectra?
-                if self._do_lnu_spectra:
-                    self._get_spectra(_gal)
-
-                # Are we generating fnu spectra?
-                if self._do_fnu_spectra:
-                    self._get_observed_spectra(_gal)
-
-                # Are we generating photometric luminosities?
-                if self._do_luminosities:
-                    self._get_photometry_luminosities(_gal)
-
-                # Are we generating photometric fluxes?
-                if self._do_fluxes:
-                    self._get_photometry_fluxes(_gal)
-
-                # Are we generating emission lines?
-                if self._do_lum_lines:
-                    self._get_lines(_gal)
-
-                # Are we generating observed emission lines?
-                if self._do_flux_lines:
-                    self._get_observed_lines(_gal)
-
-                # Are we generating luminosity images?
-                if self._do_images_lum:
-                    self._get_images_luminosity(_gal)
-
-                # Are we generating flux images?
-                if self._do_images_flux:
-                    self._get_images_flux(_gal)
-
-                # Are we generating luminosity line maps?
-                if self._do_line_maps_lum:
-                    self._get_line_maps_luminosity(_gal)
-
-                # Are we generating flux line maps?
-                if self._do_line_maps_flux:
-                    self._get_line_maps_flux(_gal)
-
-                # Are we generating luminosity data cubes?
-                if self._do_lnu_data_cubes:
-                    self._get_data_cubes_lnu(_gal)
-
-                # Are we generating flux data cubes?
-                if self._do_fnu_data_cubes:
-                    self._get_data_cubes_fnu(_gal)
-
-                # Are we generating luminosity spectroscopy?
-                if self._do_spectroscopy_lnu:
-                    self._get_spectroscopy_lnu(_gal)
-
-                # Are we generating flux spectroscopy?
-                if self._do_spectroscopy_fnu:
-                    self._get_spectroscopy_fnu(_gal)
-
-                # Child chunk outputs are accumulated back onto the original
-                # parent galaxy once this chunk has been processed.
-                # Combine back onto the original galaxy if necessary
-                if _gal is not gal:
-                    with timer("Pipeline.run.accumulate_child"):
-                        accumulate_pipeline_results_from_child(gal, _gal)
-
-                    with timer("Pipeline.run.cleanup_child"):
-                        del _gal
-
-            # Cosmic SEDs must be measured on the fully accumulated parent
-            # galaxy so any split-galaxy filtering uses integrated properties.
-            if self._do_cosmic_lnu:
-                self._get_cosmic_sed(gal)
-
-            if self._do_cosmic_fnu:
-                self._get_observed_cosmic_sed(gal)
-
-            # Run any extra analysis functions
-            self._run_extra_analysis(gal)
-
-            # Ok, we're done with this galaxy so we can unpack the results
-            self._unpack_results(gal)
-
-            # Flush the outputs to file if we're holding too many
-            if self.io_buffers.should_flush():
-                self._flush_outputs()
-
-            # Output into the progress table
-            self._add_progress_row(gal, igal, start_gal)
-            igal += 1
-
-            # Now we can remove the galaxy to free up memory
-            with timer("Pipeline.run.cleanup_galaxy"):
-                del gal
+        # Process the galaxies, either one at a time or concurrently on
+        # threads
+        if self.nr_galaxy_threads > 1:
+            self._run_per_thread_gal_queue()
+        else:
+            self._run_single_gal_queue()
 
         # print the footer for the pipeline run to the console
         with timer("Pipeline.run.print_progress_footer"):
