@@ -366,6 +366,7 @@ class TestUnitsFileHandling:
     def test_units_no_update_when_complete(self, tmp_path, monkeypatch):
         """Test that complete units file is not flagged for update."""
         from synthesizer._version import __version__
+
         from synthesizer.data.initialise import default_units_needs_update
 
         # Copy the actual default units file, stamped with this version
@@ -465,8 +466,8 @@ class TestUnitsFileHandling:
         after a version change.
         """
         import yaml
-
         from synthesizer._version import __version__
+
         from synthesizer.data.initialise import default_units_needs_update
 
         units_file = tmp_path / "base" / "default_units.yml"

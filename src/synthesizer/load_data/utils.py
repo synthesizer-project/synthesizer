@@ -19,6 +19,8 @@ import math
 
 import numpy as np
 
+from synthesizer import exceptions
+
 
 def cast_component_dtype(component, dtype):
     """Cast floating-point arrays in component input data to one dtype.
@@ -61,6 +63,103 @@ def get_begin_end_pointers(length):
     begin[1:] = np.cumsum(length)[:-1]
     end = np.cumsum(length)
     return begin, end
+
+
+def get_subfind_particle_indices(
+    lentype,
+    grp_lentype,
+    grnr,
+    grp_firstsub,
+    ptype,
+    ids=None,
+    part_ids=None,
+):
+    """Find the snapshot indices of the particles bound to each subhalo.
+
+    A Subfind catalogue orders particles by FOF group, then by subhalo
+    within the group (each subhalo ordered by particle type), with the
+    unbound particles of the group last.
+
+    If the catalogue stores the member IDs they are matched against the
+    snapshot IDs, which does not require the snapshot to be group ordered.
+    Otherwise the snapshot is assumed to be group ordered.
+
+    The member IDs are assumed to follow the catalogue order above, with
+    each subhalo in type blocks, as in the CAMELS catalogues. IDs need not
+    be unique across types (e.g. Simba), so the type of a member cannot be
+    recovered from its ID alone; a member that is not a snapshot particle
+    of this type raises an error.
+
+    Args:
+        lentype (np.ndarray of int):
+            Number of particles of each type in each subhalo
+            (Subhalo/SubhaloLenType).
+        grp_lentype (np.ndarray of int):
+            Number of particles of each type in each group
+            (Group/GroupLenType).
+        grnr (np.ndarray of int):
+            Group index of each subhalo (Subhalo/SubhaloGrNr).
+        grp_firstsub (np.ndarray of int):
+            Index of the first subhalo in each group (Group/GroupFirstSub).
+        ptype (int):
+            The particle type.
+        ids (np.ndarray of int):
+            Member IDs of all groups, for all types (IDs/ID), if stored.
+        part_ids (np.ndarray of int):
+            IDs of the snapshot particles of this type. Required if `ids`
+            is given.
+
+    Returns:
+        indices (np.ndarray of int):
+            Snapshot indices of the bound particles of this type,
+            concatenated in subhalo order. Slice with
+            `get_begin_end_pointers(lentype[:, ptype])`.
+    """
+    lentype = np.asarray(lentype, dtype=np.int64)
+    grp_lentype = np.asarray(grp_lentype, dtype=np.int64)
+    grnr = np.asarray(grnr, dtype=np.int64)
+    grp_firstsub = np.asarray(grp_firstsub, dtype=np.int64)
+
+    def offsets(sub, grp):
+        # Preceding groups, plus preceding subhaloes in the same group
+        c = np.append(0, np.cumsum(sub))
+        g = np.append(0, np.cumsum(grp))
+        return g[grnr] + c[:-1] - c[grp_firstsub[grnr]]
+
+    n = lentype[:, ptype]
+    within = np.arange(n.sum()) - np.repeat(get_begin_end_pointers(n)[0], n)
+
+    if ids is None:
+        return np.repeat(offsets(n, grp_lentype[:, ptype]), n) + within
+
+    if part_ids is None:
+        raise exceptions.InconsistentArguments(
+            "part_ids are required to match the Subfind member IDs."
+        )
+
+    start = offsets(lentype.sum(axis=1), grp_lentype.sum(axis=1))
+    start += lentype[:, :ptype].sum(axis=1)
+    members = np.asarray(ids)[np.repeat(start, n) + within]
+
+    # Match on ID. IDs can repeat (e.g. Simba), so pair the k-th occurrence
+    # in the catalogue with the k-th occurrence in the snapshot.
+    part_ids = np.asarray(part_ids)
+    p_order = np.argsort(part_ids, kind="stable")
+    m_order = np.argsort(members, kind="stable")
+    p_sorted, m_sorted = part_ids[p_order], members[m_order]
+    rank = np.arange(len(m_sorted)) - np.searchsorted(m_sorted, m_sorted)
+    loc = np.searchsorted(p_sorted, m_sorted) + rank
+    found = loc < len(p_sorted)
+    found[found] = p_sorted[loc[found]] == m_sorted[found]
+    if not np.all(found):
+        raise exceptions.InconsistentArguments(
+            f"{np.sum(~found)} Subfind member IDs of type {ptype} are "
+            "not in the snapshot."
+        )
+
+    indices = np.empty(len(members), dtype=np.int64)
+    indices[m_order] = p_order[loc]
+    return indices
 
 
 def age_lookup_table(cosmo, redshift=0.0, delta_a=1e-3, low_lim=1e-4):
