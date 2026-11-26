@@ -41,7 +41,7 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import Normalize
 from scipy.ndimage import zoom
-from unyt import angstrom
+from unyt import angstrom, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.imaging.base_imaging import ImagingBase
@@ -162,7 +162,10 @@ class SpectralCube(ImagingBase):
                 "generate_data_cube_hist or generate_data_cube_smoothed "
                 "first."
             )
-        return self.arr * self.units
+
+        # Wrap the array rather than multiplying by the units, which would
+        # copy the whole cube
+        return unyt_array(self.arr, self.units)
 
     @property
     def ifu(self):
