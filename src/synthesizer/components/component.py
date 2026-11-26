@@ -405,6 +405,7 @@ class Component(ABC):
         grid_assignment_method="cic",
         out_dtype=None,
         covering_fraction=None,
+        nr_model_threads=1,
         **kwargs,
     ):
         """Generate stellar spectra as described by the emission model.
@@ -440,6 +441,11 @@ class Component(ABC):
             covering_fraction (dict):
                 No longer supported, passing it raises an error.
                 Modify the EmissionModel (or the emitter) instead.
+            nr_model_threads (int):
+                The number of threads to execute independent emission models
+                with concurrently. This requires a free-threaded (no-GIL)
+                build of Python; with the GIL enabled a warning is issued and
+                the models are executed serially.
             **kwargs (dict):
                 Any additional keyword arguments to pass to
                 EmissionModel._get_spectra, which raises an error for any it
@@ -468,6 +474,7 @@ class Component(ABC):
             if self.component_type == "Stars"
             else {"blackhole": self},
             verbose=verbose,
+            nr_model_threads=nr_model_threads,
             nthreads=nthreads,
             grid_assignment_method=grid_assignment_method,
             out_dtype=out_dtype,
@@ -497,6 +504,7 @@ class Component(ABC):
         verbose=True,
         out_dtype=None,
         covering_fraction=None,
+        nr_model_threads=1,
         **kwargs,
     ):
         """Generate stellar lines as described by the emission model.
@@ -526,6 +534,11 @@ class Component(ABC):
             covering_fraction (dict):
                 No longer supported, passing it raises an error.
                 Modify the EmissionModel (or the emitter) instead.
+            nr_model_threads (int):
+                The number of threads to execute independent emission models
+                with concurrently. This requires a free-threaded (no-GIL)
+                build of Python; with the GIL enabled a warning is issued and
+                the models are executed serially.
             kwargs (dict):
                 Any additional keyword arguments to pass to
                 EmissionModel._get_lines, which raises an error for any it
@@ -553,6 +566,7 @@ class Component(ABC):
             if self.component_type == "Stars"
             else {"blackhole": self},
             verbose=verbose,
+            nr_model_threads=nr_model_threads,
             out_dtype=out_dtype,
             **kwargs,
         )

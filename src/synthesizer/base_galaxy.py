@@ -1193,6 +1193,7 @@ class BaseGalaxy:
         vel_shift=None,
         verbose=True,
         out_dtype=None,
+        nr_model_threads=1,
         **kwargs,
     ):
         """Generate spectra as described by the emission model.
@@ -1222,6 +1223,11 @@ class BaseGalaxy:
                 Are we talking?
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted spectra arrays.
+            nr_model_threads (int):
+                The number of threads to execute independent emission models
+                with concurrently. This requires a free-threaded (no-GIL)
+                build of Python; with the GIL enabled a warning is issued and
+                the models are executed serially.
             kwargs (dict):
                 Any additional keyword arguments to pass to
                 EmissionModel._get_spectra, which raises an error for any it
@@ -1250,6 +1256,7 @@ class BaseGalaxy:
                 "galaxy": self,
             },
             verbose=verbose,
+            nr_model_threads=nr_model_threads,
             out_dtype=out_dtype,
             **kwargs,
         )
@@ -1311,6 +1318,7 @@ class BaseGalaxy:
         mask=None,
         verbose=True,
         out_dtype=None,
+        nr_model_threads=1,
         **kwargs,
     ):
         """Generate lines as described by the emission model.
@@ -1339,6 +1347,11 @@ class BaseGalaxy:
                 Are we talking?
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted line arrays.
+            nr_model_threads (int):
+                The number of threads to execute independent emission models
+                with concurrently. This requires a free-threaded (no-GIL)
+                build of Python; with the GIL enabled a warning is issued and
+                the models are executed serially.
             kwargs (dict):
                 Any additional keyword arguments to pass to
                 EmissionModel._get_lines, which raises an error for any it
@@ -1367,6 +1380,7 @@ class BaseGalaxy:
                 "galaxy": self,
             },
             verbose=verbose,
+            nr_model_threads=nr_model_threads,
             out_dtype=out_dtype,
             **kwargs,
         )
