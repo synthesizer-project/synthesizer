@@ -35,6 +35,7 @@ from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts, convert_in_place
+from synthesizer.utils import pluralize
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.stats import weighted_mean, weighted_median
@@ -735,7 +736,12 @@ class Stars(StarsComponent):
 
         # Repeating each point gives a zero width bin at it, with a finite
         # bin between each pair of points
-        age_edges = np.repeat(convert_in_place(self.ages, yr).ndview, 2)
+        age_edges = np.repeat(
+            np.asarray(
+                convert_in_place(self.ages, yr).ndview, dtype=np.float64
+            ),
+            2,
+        )
         metal_edges = np.repeat(
             np.asarray(self.metallicities, dtype=np.float64), 2
         )
@@ -955,8 +961,11 @@ class Stars(StarsComponent):
                 attr, attr_override_obj, None, self, preserve_units=True
             )
 
-        # Otherwise, is this a condition on a bin axis?
+        # Otherwise, is this a condition on a bin axis? (accepting the
+        # singular axis name, e.g. "metallicity", as get_param does)
         axis = attr[5:] if attr.startswith("log10") else attr
+        if pluralize(axis) in self.bin_axes:
+            axis = pluralize(axis)
         if override is None and axis in self.bin_axes:
             # "!=" would need a range with a hole in it
             if op == "!=":
@@ -1040,7 +1049,7 @@ class Stars(StarsComponent):
         # units, stored in yr)
         elif isinstance(thresh, unyt_quantity):
             if axis == "ages":
-                value = float(convert_in_place(thresh, yr).ndview)
+                value = float(thresh.to_value(yr))
             else:
                 value = float(thresh.ndview)
 

@@ -1629,7 +1629,7 @@ class ParametricExtractorBase(Extractor):
             extracted.append(
                 np.full(
                     weight.shape[bin_axes[-1] + 1] + 1,
-                    10 ** value[0] if log else value[0],
+                    10.0 ** value[0] if log else value[0],
                     dtype=weight.dtype,
                 )
             )

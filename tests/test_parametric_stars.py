@@ -867,6 +867,36 @@ class TestMask:
         # Each axis must hold its own range
         np.testing.assert_array_equal(mask, [[8e6, 1.2e7], [-BIG, 0.002]])
 
+    def test_singular_axis_names(self, stars):
+        """Singular axis names mask the bin axes like the plural names.
+
+        Args:
+            stars (Stars):
+                The single 5-20 Myr bin Stars fixture.
+        """
+        # Combine the same conditions as above using singular names
+        mask = stars.get_mask("age", 8 * Myr, ">=")
+        mask = stars.get_mask("log10age", np.log10(1.2e7), "<=", mask=mask)
+        mask = stars.get_mask("metallicity", 0.002, "<=", mask=mask)
+
+        # Each axis must hold its own range
+        np.testing.assert_allclose(mask, [[8e6, 1.2e7], [-BIG, 0.002]])
+
+    def test_threshold_not_modified(self, stars):
+        """Masking on the ages leaves the threshold's units alone.
+
+        Args:
+            stars (Stars):
+                The single 5-20 Myr bin Stars fixture.
+        """
+        # Mask with a threshold in Myr
+        thresh = 10 * Myr
+        stars.get_mask("ages", thresh, ">=")
+
+        # The threshold must still be in Myr
+        assert thresh.units == Myr
+        assert thresh.value == 10
+
     def test_strictness_on_points(self, test_grid):
         """A point on the threshold fails "<" and passes "<=".
 
@@ -1395,3 +1425,24 @@ def test_sfzh_shape_is_validated(test_grid):
             test_grid.metallicities,
             sfzh=np.ones(test_grid.metallicities.size),
         )
+
+
+def test_float32_axes_sfzh_spectra(test_grid):
+    """An explicit SFZH on float32 axes still produces spectra.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+    """
+    # Make some stars on float32 axes from an explicit SFZH
+    stars = Stars(
+        test_grid.log10ages.astype(np.float32),
+        test_grid.metallicities,
+        sfzh=np.ones((test_grid.log10ages.size, test_grid.metallicities.size)),
+    )
+
+    # The spectra must be finite and non-zero
+    model = IncidentEmission(test_grid)
+    sed = stars.get_spectra(model)
+    assert np.all(np.isfinite(sed.lnu))
+    assert np.sum(sed.lnu) > 0
