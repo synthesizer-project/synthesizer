@@ -128,6 +128,39 @@ class TestGetParamBasics:
         assert result == 40.0
 
 
+class TestGetParamFixedAliases:
+    """Test fixed parameters given under an alias of the parameter."""
+
+    def test_singular_alias_overrides_emitter(self):
+        """A singular fixed name overrides the emitter's plural attribute."""
+        # Fix the singular name while the emitter holds the plural one
+        model = MockModel()
+        model.fixed_parameters["age"] = 5.0
+
+        # The model's value must win
+        assert get_param("ages", model, None, MockEmitter()) == 5.0
+
+    def test_log_aliases(self):
+        """A linear fixed name is logged for a log10 parameter."""
+        # Fix the linear value and ask for the log10 one
+        model = MockModel()
+        model.fixed_parameters["age"] = 100.0
+        assert get_param("log10ages", model, None, MockEmitter()) == 2.0
+
+        # A log10 name doesn't fix the linear value (its units are unknown)
+        model.fixed_parameters = {"log10age": 2.0}
+        emitter = MockEmitter()
+        assert get_param("ages", model, None, emitter) is emitter.ages
+
+    def test_log_alias_with_units_raises(self):
+        """A log10 conversion of a fixed value with units must raise."""
+        # Fix a linear value with units and ask for the log10 one
+        model = MockModel()
+        model.fixed_parameters["ages"] = 100.0 * unyt.yr
+        with pytest.raises(exceptions.InconsistentArguments):
+            get_param("log10ages", model, None, MockEmitter())
+
+
 class TestGetParamDefaults:
     """Test default value handling in get_param."""
 
