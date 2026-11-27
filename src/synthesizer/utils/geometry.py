@@ -40,29 +40,43 @@ def get_rotation_matrix(
         matrix (np.ndarray of float):
             The rotation matrix.
     """
-    # Define the unit vector is needed
+    # Define the unit vector if needed
     if unit is None:
         unit = [0.0, 0.0, 1.0]
 
-    # Ensure we have arrays
-    if not isinstance(vector, np.ndarray):
-        vector = np.array(vector)
-    if not isinstance(unit, np.ndarray):
-        unit = np.array(unit)
+    # Convert to float64 arrays without mutating caller inputs
+    vec = np.asarray(vector, dtype=np.float64)
+    target = np.asarray(unit, dtype=np.float64)
 
-    # Normalize vector length
-    vector /= np.linalg.norm(vector)
+    # Normalize both vectors
+    vec = vec / np.linalg.norm(vec)
+    target = target / np.linalg.norm(target)
 
     # Get axis
-    uvw = np.cross(vector, unit)
+    uvw = np.cross(vec, target)
 
     # Compute trig values - no need to go through arccos and back
-    rcos = np.dot(vector, unit)
+    rcos = np.dot(vec, target)
     rsin = np.linalg.norm(uvw)
 
+    # Handle parallel and anti-parallel cases explicitly
+    if np.isclose(rsin, 0.0):
+        if rcos >= 0.0:
+            return np.eye(3, dtype=np.float64)
+
+        # Anti-parallel: construct a proper 180-degree rotation (det = +1)
+        # around a unit axis orthogonal to vec.
+        ref = (
+            np.array([1.0, 0.0, 0.0])
+            if abs(vec[0]) < 0.9
+            else np.array([0.0, 1.0, 0.0])
+        )
+        axis = np.cross(vec, ref)
+        axis /= np.linalg.norm(axis)
+        return (2.0 * np.outer(axis, axis) - np.eye(3)).astype(np.float64)
+
     # Normalize and unpack axis
-    if not np.isclose(rsin, 0):
-        uvw /= rsin
+    uvw = uvw / rsin
     u, v, w = uvw
 
     # Compute rotation matrix
