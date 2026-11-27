@@ -79,11 +79,12 @@ def load_SHARK(
             'particle' (default) returns particle galaxies with one
             particle per non-zero bin per component, split at every grid
             age the bin contains so young star formation is resolved.
-            'parametric' integrates each bin over the grid age cells
-            (the ``parametric.Stars`` convention) and returns parametric
-            galaxies. Note the per-particle component tags are lost in
-            the combined SFZH; pass e.g. ``components=("disks",)`` for
-            per-component parametric galaxies.
+            'parametric' spreads each bin onto the grid ages with the bin
+            in cell approach (the ``parametric.Stars`` convention) and
+            returns parametric galaxies. Note the per-particle component
+            tags are lost in the combined SFZH; pass e.g.
+            ``components=("disks",)`` for per-component parametric
+            galaxies.
         components (tuple):
             SHARK components to include, a subset of
             ('disks', 'bulges_mergers', 'bulges_diskins').
@@ -161,7 +162,13 @@ def load_SHARK(
         b, age, frac = split_age_bins(lo, hi, grid_ages)
         mass, zmet, tags = mass[:, b] * frac, zmet[:, b], tags[b]
     else:
-        overlap = bin_overlap_matrix(lo, hi, grid_ages)
+        # Every component shares the same bins, so spread them onto the
+        # grid ages once and repeat the result for each component
+        nbin = delta_t.size
+        overlap = np.tile(
+            bin_overlap_matrix(lo[:nbin], hi[:nbin], grid.log10ages),
+            (ncomp, 1),
+        )
         log10zs = np.log10(grid.metallicities)
 
     if verbose:

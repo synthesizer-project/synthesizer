@@ -282,6 +282,44 @@ def get_emission_label(emission):
     return getattr(emission, "label", emission)
 
 
+def get_fixed_param_name(param, model):
+    """Find the name a model fixes a parameter under.
+
+    A model can fix a parameter under its singular or plural name, and a
+    log10 parameter under its linear name (e.g. "metallicity" for
+    "log10metallicities"), which get_param then logs. A linear parameter
+    isn't matched by a log10 name since the units of the linear value
+    would be unknown.
+
+    Args:
+        param (str):
+            The parameter to look for.
+        model (EmissionModel):
+            The model whose fixed parameters to search, or None.
+
+    Returns:
+        str:
+            The name the parameter is fixed under, or None if the model
+            doesn't fix it.
+    """
+    # Without a model nothing can be fixed
+    fixed = getattr(model, "fixed_parameters", {})
+
+    # The exact name takes precedence over any alias
+    if param in fixed:
+        return param
+
+    # Otherwise try the singular and plural forms, and the linear forms of a
+    # log10 parameter
+    logged = "log10" in param
+    base = param.replace("log10", "")
+    for name in (base, depluralize(base), pluralize(base)):
+        for alias in (f"log10{name}", name) if logged else (name,):
+            if alias in fixed:
+                return alias
+    return None
+
+
 def get_param(
     param,
     model,
@@ -348,20 +386,33 @@ def get_param(
     # Are we looking for a logged parameter?
     logged = "log10" in param
 
-    # Check the model's fixed parameters first
-    if model is not None and param in model.fixed_parameters:
+    # Check the model's fixed parameters first (under any alias of the
+    # parameter)
+    fixed_name = get_fixed_param_name(param, model)
+    if fixed_name is not None:
         # A variation marker is a declaration, not a value. If one is still
         # here then the model tree was never expanded.
-        if isinstance(model.fixed_parameters[param], VARIATION_TYPES):
-            marker_type = type(model.fixed_parameters[param]).__name__
+        value = model.fixed_parameters[fixed_name]
+        if isinstance(value, VARIATION_TYPES):
+            marker_type = type(value).__name__
             raise exceptions.InconsistentArguments(
                 f"Found an unexpanded {marker_type} "
-                f"for '{param}' on model '{model.label}'. Call "
+                f"for '{fixed_name}' on model '{model.label}'. Call "
                 "expand_models() on the root model to generate the variant "
                 "models before generating an emission."
             )
 
-        value = model.fixed_parameters[param]
+        # A log10 parameter fixed under its linear name needs logging, which
+        # we can only do for plain numbers
+        if logged and "log10" not in fixed_name:
+            if isinstance(
+                value, (unyt_array, unyt_quantity, str, ParameterFunction)
+            ):
+                raise exceptions.InconsistentArguments(
+                    f"Model '{model.label}' fixes '{fixed_name}' but "
+                    f"'{param}' is needed. Fix '{param}' itself instead."
+                )
+            value = np.log10(value)
 
     # Check the emission next
     elif emission is not None and hasattr(emission, param):
