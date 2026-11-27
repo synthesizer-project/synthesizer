@@ -85,6 +85,32 @@ class TestGridInitialization:
         assert len(grid.spectra) == 0
         assert grid.lam is None
 
+    def test_lines_only_grid_without_continua(self, tmp_path, test_grid):
+        """Test a grid with lines but no spectra or line continua loads."""
+        grid_path = tmp_path / "lines_only_grid.hdf5"
+
+        with (
+            h5py.File(test_grid.grid_filename, "r") as src,
+            h5py.File(grid_path, "w") as dst,
+        ):
+            for key, value in src.attrs.items():
+                dst.attrs[key] = value
+            for key in src.keys():
+                if key not in ("spectra", "lines"):
+                    src.copy(key, dst)
+            for key in ("id", "wavelength", "luminosity"):
+                src.copy(f"lines/{key}", dst, name=f"lines/{key}")
+
+        with pytest.warns(RuntimeWarning, match="no line continua"):
+            grid = Grid(grid_path.name, grid_dir=tmp_path, ignore_spectra=True)
+
+        np.testing.assert_allclose(
+            grid.line_lums["nebular"], test_grid.line_lums["nebular"]
+        )
+        for key in ("nebular", "linecont", "nebular_continuum", "transmitted"):
+            assert np.all(grid.line_conts[key] == 0)
+            assert grid.line_conts[key].units == erg / s / Hz
+
     def test_grid_with_ignore_lines(self, test_grid_name):
         """Test Grid initialization with ignore_lines=True."""
         grid = Grid(test_grid_name, ignore_lines=True)
@@ -1032,6 +1058,102 @@ class TestGridCollapse:
         for emission_type in collapsed_grid.available_line_emissions:
             assert collapsed_grid.line_lums[emission_type].flags.c_contiguous
             assert collapsed_grid.line_conts[emission_type].flags.c_contiguous
+
+    @pytest.mark.parametrize(
+        "method", ["marginalize", "interpolate", "nearest"]
+    )
+    @pytest.mark.parametrize(
+        "grid_kwargs",
+        [{"ignore_spectra": True}, {"ignore_lines": True}],
+        ids=["lines_only", "spectra_only"],
+    )
+    def test_collapse_partial_grid(self, test_grid_name, method, grid_kwargs):
+        """Test collapsing a grid holding only lines or only spectra.
+
+        Args:
+            test_grid_name (str):
+                The name of the test grid file.
+            method (str):
+                The collapse method to test.
+            grid_kwargs (dict):
+                The Grid kwargs selecting which emissions are loaded.
+        """
+        # Load a grid with only one of lines or spectra
+        grid = Grid(test_grid_name, **grid_kwargs)
+        original_shape = grid.shape
+
+        # Pick a value in the middle of the first axis (ignored when
+        # marginalizing)
+        axis_to_collapse = grid.axes[0]
+        axis_values = getattr(grid, axis_to_collapse)
+        value = axis_values[len(axis_values) // 2]
+
+        # Collapse the first axis
+        collapsed_grid = grid.collapse(
+            axis_to_collapse,
+            method=method,
+            value=None if method == "marginalize" else value,
+        )
+
+        # Every emission array the grid holds must have lost the first axis
+        for spectra_type in collapsed_grid.available_spectra:
+            assert (
+                collapsed_grid.spectra[spectra_type].shape
+                == original_shape[1:]
+            )
+        for emission_type in collapsed_grid.available_line_emissions:
+            assert (
+                collapsed_grid.line_lums[emission_type].shape
+                == original_shape[1:]
+            )
+            assert (
+                collapsed_grid.line_conts[emission_type].shape
+                == original_shape[1:]
+            )
+
+            # The line arrays must also have kept their units
+            assert (
+                collapsed_grid.line_lums[emission_type].units
+                == grid.line_lums[emission_type].units
+            )
+            assert (
+                collapsed_grid.line_conts[emission_type].units
+                == grid.line_conts[emission_type].units
+            )
+
+        # Lines must still be extractable from the collapsed grid
+        if collapsed_grid.has_lines:
+            grid_point = tuple(0 for _ in collapsed_grid.axes)
+            collapsed_grid.get_lines(grid_point)
+
+    def test_collapse_interpolate_axis_top(self, test_grid_name):
+        """Test interpolating at the top of an axis gives the last point.
+
+        Args:
+            test_grid_name (str):
+                The name of the test grid file.
+        """
+        # Load the grid and get the last value on the first axis
+        grid = Grid(test_grid_name)
+        axis_to_collapse = grid.axes[0]
+        value = getattr(grid, axis_to_collapse)[-1]
+
+        # Collapse by interpolating to the very top of the axis
+        collapsed_grid = grid.collapse(
+            axis_to_collapse, method="interpolate", value=value
+        )
+
+        # The result must be the final slice along the collapsed axis
+        for spectra_type in collapsed_grid.available_spectra:
+            assert np.allclose(
+                collapsed_grid.spectra[spectra_type],
+                grid.spectra[spectra_type][-1],
+            )
+        for emission_type in collapsed_grid.available_line_emissions:
+            assert np.allclose(
+                collapsed_grid.line_lums[emission_type],
+                grid.line_lums[emission_type][-1],
+            )
 
     def test_collapse_invalid_args(self, test_grid_name):
         """Test collapse with invalid arguments."""
