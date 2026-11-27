@@ -891,6 +891,28 @@ def test_do_grid_check_warns(test_grid, nebular_emission_model):
     assert "50.00%" in mock_warn.call_args[0][0]
 
 
+def test_parametric_fixed_axis_alias(test_grid):
+    """Test a model fixing a grid axis under an alias is honoured.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+    """
+    # Create a Stars on the grid's axes
+    stars = ParametricStars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sfzh=np.ones((test_grid.log10ages.size, test_grid.metallicities.size)),
+    )
+
+    # Fixing the singular linear name must match fixing the grid axis
+    exact = stars.get_spectra(
+        IncidentEmission(test_grid, log10metallicities=np.log10(0.02))
+    )
+    alias = stars.get_spectra(IncidentEmission(test_grid, metallicity=0.02))
+    np.testing.assert_allclose(alias.lnu, exact.lnu)
+
+
 def test_parametric_mask_on_fixed_axis_raises(test_grid):
     """Test a mask on a bin axis the model fixes is refused.
 

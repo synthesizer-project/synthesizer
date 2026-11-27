@@ -29,7 +29,10 @@ from unyt import (
 
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
-from synthesizer.emission_models.utils import get_param
+from synthesizer.emission_models.utils import (
+    get_fixed_param_name,
+    get_param,
+)
 from synthesizer.grid import Grid
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
@@ -39,6 +42,7 @@ from synthesizer.utils import pluralize
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.stats import weighted_mean, weighted_median
+from synthesizer.utils.util_funcs import get_attr_unit_conversion
 
 # The number of bins each interval between axis points is split into when
 # binning an SFH or metallicity distribution function. Mass is uniform within
@@ -519,7 +523,11 @@ class Stars(StarsComponent):
 
         # An instantaneous SFH is a single point
         if self._instant_sf is not None:
-            age = convert_in_place(self._instant_sf, yr).value + offset
+            age = (
+                float(self._instant_sf.ndview)
+                * get_attr_unit_conversion(self._instant_sf.units, yr)
+                + offset
+            )
             return np.array([age, age]), np.array([1.0])
 
         # An array is defined at the points of the axis
@@ -734,17 +742,13 @@ class Stars(StarsComponent):
                 f"{shape}, got {np.shape(sfzh)}."
             )
 
-        # Repeating each point gives a zero width bin at it, with a finite
-        # bin between each pair of points
-        age_edges = np.repeat(
-            np.asarray(
-                convert_in_place(self.ages, yr).ndview, dtype=np.float64
-            ),
-            2,
+        # Each point becomes a zero width bin with a finite bin between each
+        # pair of points (the masses go in below, so only the edges are
+        # needed here)
+        age_edges, _ = self._points_to_bins(
+            convert_in_place(self.ages, yr).ndview, 0.0
         )
-        metal_edges = np.repeat(
-            np.asarray(self.metallicities, dtype=np.float64), 2
-        )
+        metal_edges, _ = self._points_to_bins(self.metallicities, 0.0)
 
         # Put the SFZH in the zero width bins (even indices on both axes),
         # leaving the finite bins between them empty
@@ -956,7 +960,7 @@ class Stars(StarsComponent):
 
         # A fixed model parameter applies to the whole population
         override = None
-        if attr in getattr(attr_override_obj, "fixed_parameters", {}):
+        if get_fixed_param_name(attr, attr_override_obj) is not None:
             override = get_param(
                 attr, attr_override_obj, None, self, preserve_units=True
             )
@@ -1049,7 +1053,9 @@ class Stars(StarsComponent):
         # units, stored in yr)
         elif isinstance(thresh, unyt_quantity):
             if axis == "ages":
-                value = float(thresh.to_value(yr))
+                value = float(thresh.ndview) * get_attr_unit_conversion(
+                    thresh.units, yr
+                )
             else:
                 value = float(thresh.ndview)
 

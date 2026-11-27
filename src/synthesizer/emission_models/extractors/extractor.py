@@ -20,7 +20,10 @@ import numpy as np
 from unyt import Hz, Unit, c, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.emission_models.utils import get_param
+from synthesizer.emission_models.utils import (
+    get_fixed_param_name,
+    get_param,
+)
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.doppler_particle_spectra import (
     compute_part_seds_with_vel_shift,
@@ -1567,7 +1570,7 @@ class ParametricExtractorBase(Extractor):
             # fix it) we can use its bin edges as they are
             if (
                 bin_axis in emitter.bin_axes
-                and axis not in model.fixed_parameters
+                and get_fixed_param_name(axis, model) is None
             ):
                 # Get the bin edges and the factor converting them into the
                 # grid's units (edges without units need no conversion)

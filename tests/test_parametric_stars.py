@@ -1446,3 +1446,24 @@ def test_float32_axes_sfzh_spectra(test_grid):
     sed = stars.get_spectra(model)
     assert np.all(np.isfinite(sed.lnu))
     assert np.sum(sed.lnu) > 0
+
+
+def test_instant_sf_not_modified(test_grid):
+    """Building Stars from an instantaneous SFH leaves its units alone.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+    """
+    # Make some stars with an instantaneous SFH in Myr
+    age = 10 * Myr
+    Stars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sf_hist=age,
+        metal_dist=0.01,
+    )
+
+    # The age must still be in Myr
+    assert age.units == Myr
+    assert age.value == 10
