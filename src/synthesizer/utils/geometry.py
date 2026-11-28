@@ -63,6 +63,11 @@ def get_rotation_matrix(
     # Normalize and unpack axis
     if not np.isclose(rsin, 0):
         uvw /= rsin
+    elif rcos < 0:
+        # Anti-parallel case: the cross product vanishes, so rotate by 180
+        # degrees about an axis perpendicular to vector
+        uvw = np.cross(vector, np.eye(3)[np.argmin(np.abs(vector))])
+        uvw /= np.linalg.norm(uvw)
     u, v, w = uvw
 
     # Compute rotation matrix

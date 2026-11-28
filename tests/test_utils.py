@@ -230,3 +230,19 @@ class TestHDF5AttrValue:
                 return "Thing(a=1)"
 
         assert hdf5_attr_value(Thing()) == ("Thing(a=1)", None)
+
+
+class TestGetRotationMatrix:
+    """Tests for synthesizer.utils.geometry.get_rotation_matrix."""
+
+    def test_antiparallel_vectors_return_proper_rotation(self):
+        """Anti-parallel inputs should return a proper SO(3) rotation."""
+        from synthesizer.utils.geometry import get_rotation_matrix
+
+        v = np.array([0.0, 0.0, 1.0])
+        u = np.array([0.0, 0.0, -1.0])
+        rot = get_rotation_matrix(v, u)
+
+        np.testing.assert_allclose(rot @ v, u, atol=1e-12)
+        np.testing.assert_allclose(rot.T @ rot, np.eye(3), atol=1e-12)
+        assert np.isclose(np.linalg.det(rot), 1.0, atol=1e-12)
