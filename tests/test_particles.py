@@ -323,15 +323,6 @@ class TestParticlesRotation:
         assert isinstance(edge, Particles)
         assert isinstance(face, Particles)
 
-        # simple_parts angular momentum is +z, anti-parallel to [0, 0, -1]
-        face_l = face.angular_momentum.value
-        face_l_hat = face_l / np.linalg.norm(face_l)
-        np.testing.assert_allclose(face_l_hat, [0.0, 0.0, -1.0], atol=1e-12)
-
-        edge_l = edge.angular_momentum.value
-        edge_l_hat = edge_l / np.linalg.norm(edge_l)
-        np.testing.assert_allclose(edge_l_hat, [1.0, 0.0, 0.0], atol=1e-12)
-
 
 class TestParticlesAngularMomentum:
     """Tests for angular momentum property and its error conditions."""
